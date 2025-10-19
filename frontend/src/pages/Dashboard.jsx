@@ -387,9 +387,21 @@ function Dashboard() {
           <div className="modal-overlay" onClick={() => setShowImportCSV(false)}>
             <div className="modal" onClick={(e) => e.stopPropagation()}>
               <h2>Import Portfolio from CSV</h2>
-              <p className="text-secondary" style={{ marginBottom: '1.5rem' }}>
+              <p className="text-secondary" style={{ marginBottom: '1rem' }}>
                 Upload a CSV file exported from Trading 212 to import all your positions at once.
               </p>
+              <div className="alert alert-info" style={{
+                padding: '0.75rem 1rem',
+                marginBottom: '1.5rem',
+                backgroundColor: '#eff6ff',
+                border: '1px solid #bfdbfe',
+                borderRadius: '6px',
+                fontSize: '0.875rem',
+                color: '#1e40af'
+              }}>
+                <strong>Note:</strong> Currently, we only support CSV files exported from Trading 212.
+                The format must include columns: Slice (symbol), Name, Invested value, and Owned quantity.
+              </div>
               <form onSubmit={handleImportCSV}>
                 <div className="form-group">
                   <label htmlFor="csv-file">Select CSV File</label>
