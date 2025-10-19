@@ -1,16 +1,29 @@
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, ExternalLink } from 'lucide-react';
-import { newsApi } from '../services/api';
+import { RefreshCw, ExternalLink, Filter } from 'lucide-react';
+import { newsApi, positionsApi } from '../services/api';
 import { formatDistanceToNow } from 'date-fns';
 import './News.css';
 
 function News() {
   const queryClient = useQueryClient();
+  const [sortBy, setSortBy] = useState('latest'); // latest, oldest, highest-sentiment, lowest-sentiment
+  const [filterStock, setFilterStock] = useState('all');
+  const [showFilters, setShowFilters] = useState(false);
 
   const { data: news, isLoading } = useQuery({
     queryKey: ['news'],
     queryFn: async () => {
       const response = await newsApi.getAll({ limit: 100 });
+      return response.data;
+    },
+  });
+
+  // Get all stocks in portfolio for filter dropdown
+  const { data: positions = [] } = useQuery({
+    queryKey: ['positions'],
+    queryFn: async () => {
+      const response = await positionsApi.getAll();
       return response.data;
     },
   });
@@ -29,6 +42,43 @@ function News() {
     return 'neutral';
   };
 
+  // Filter and sort news
+  const filteredAndSortedNews = useMemo(() => {
+    if (!news) return [];
+
+    let filtered = [...news];
+
+    // Filter by stock
+    if (filterStock !== 'all') {
+      filtered = filtered.filter(article =>
+        article.stock_symbols && article.stock_symbols.includes(filterStock)
+      );
+    }
+
+    // Sort
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'latest':
+          return new Date(b.published_at) - new Date(a.published_at);
+        case 'oldest':
+          return new Date(a.published_at) - new Date(b.published_at);
+        case 'highest-sentiment':
+          return (b.sentiment_score || 0) - (a.sentiment_score || 0);
+        case 'lowest-sentiment':
+          return (a.sentiment_score || 0) - (b.sentiment_score || 0);
+        default:
+          return 0;
+      }
+    });
+
+    return filtered;
+  }, [news, sortBy, filterStock]);
+
+  // Get unique stocks from positions
+  const portfolioStocks = useMemo(() => {
+    return positions.map(p => p.stock.symbol).sort();
+  }, [positions]);
+
   if (isLoading) {
     return <div className="loading"><div className="spinner"></div></div>;
   }
@@ -37,20 +87,78 @@ function News() {
     <div className="news-page">
       <div className="container">
         <div className="news-header">
-          <h1>Market News</h1>
-          <button
-            className="btn btn-primary"
-            onClick={() => refreshMutation.mutate()}
-            disabled={refreshMutation.isLoading}
-          >
-            <RefreshCw size={20} className={refreshMutation.isLoading ? 'spinning' : ''} />
-            {refreshMutation.isLoading ? 'Refreshing...' : 'Refresh News'}
-          </button>
+          <div>
+            <h1>Market News</h1>
+            <p className="text-secondary">{filteredAndSortedNews.length} articles</p>
+          </div>
+          <div className="news-actions">
+            <button
+              className="btn btn-secondary"
+              onClick={() => setShowFilters(!showFilters)}
+            >
+              <Filter size={20} />
+              {showFilters ? 'Hide Filters' : 'Show Filters'}
+            </button>
+            <button
+              className="btn btn-primary"
+              onClick={() => refreshMutation.mutate()}
+              disabled={refreshMutation.isLoading}
+            >
+              <RefreshCw size={20} className={refreshMutation.isLoading ? 'spinning' : ''} />
+              {refreshMutation.isLoading ? 'Refreshing...' : 'Refresh News'}
+            </button>
+          </div>
         </div>
 
-        {news && news.length > 0 ? (
+        {showFilters && (
+          <div className="news-filters card">
+            <div className="filter-group">
+              <label htmlFor="sort-by">Sort By:</label>
+              <select
+                id="sort-by"
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value)}
+                className="filter-select"
+              >
+                <option value="latest">Latest First</option>
+                <option value="oldest">Oldest First</option>
+                <option value="highest-sentiment">Highest Sentiment</option>
+                <option value="lowest-sentiment">Lowest Sentiment</option>
+              </select>
+            </div>
+
+            <div className="filter-group">
+              <label htmlFor="filter-stock">Filter by Stock:</label>
+              <select
+                id="filter-stock"
+                value={filterStock}
+                onChange={(e) => setFilterStock(e.target.value)}
+                className="filter-select"
+              >
+                <option value="all">All Stocks</option>
+                {portfolioStocks.map(symbol => (
+                  <option key={symbol} value={symbol}>{symbol}</option>
+                ))}
+              </select>
+            </div>
+
+            {(sortBy !== 'latest' || filterStock !== 'all') && (
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  setSortBy('latest');
+                  setFilterStock('all');
+                }}
+              >
+                Clear Filters
+              </button>
+            )}
+          </div>
+        )}
+
+        {filteredAndSortedNews && filteredAndSortedNews.length > 0 ? (
           <div className="news-list">
-            {news.map((article) => {
+            {filteredAndSortedNews.map((article) => {
               const sentiment = getSentimentLabel(article.sentiment_score);
               return (
                 <div key={article.id} className="news-card card">
