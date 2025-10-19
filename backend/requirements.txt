@@ -1,0 +1,37 @@
+# FastAPI and server
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Database - PostgreSQL
+psycopg2-binary==2.9.9
+sqlalchemy==2.0.23
+alembic==1.12.1
+
+# Database - ChromaDB (Vector)
+chromadb==0.4.18
+
+# API Integrations
+requests==2.31.0
+httpx==0.25.1
+
+# Google Gemini
+google-generativeai==0.3.1
+
+# Data processing
+pandas==2.1.3
+numpy==1.26.2
+
+# Environment variables
+python-dotenv==1.0.0
+
+# CORS
+python-multipart==0.0.6
+
+# Async support
+asyncio==3.4.3
+aiohttp==3.9.1
+
+# Logging
+python-json-logger==2.0.7

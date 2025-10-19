@@ -1,0 +1,39 @@
+import axios from 'axios';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Stocks API
+export const stocksApi = {
+  getAll: () => api.get('/stocks'),
+  getOne: (symbol) => api.get(`/stocks/${symbol}`),
+  create: (stockData) => api.post('/stocks', stockData),
+  delete: (symbol) => api.delete(`/stocks/${symbol}`),
+  refresh: (symbol) => api.post(`/stocks/${symbol}/refresh`),
+  search: (keywords) => api.get(`/stocks/${keywords}/search`),
+};
+
+// News API
+export const newsApi = {
+  getAll: (params) => api.get('/news', { params }),
+  getOne: (articleId) => api.get(`/news/${articleId}`),
+  refresh: () => api.post('/news/refresh'),
+  analyzeSentiment: (articleId) => api.post(`/news/${articleId}/analyze-sentiment`),
+};
+
+// Query API
+export const queryApi = {
+  ask: (question, contextLimit = 5) =>
+    api.post('/query/ask', { question, context_limit: contextLimit }),
+  getPortfolioSummary: () => api.get('/query/portfolio-summary'),
+  getStockSentiment: (symbol, days = 7) =>
+    api.get(`/query/sentiment-analysis/${symbol}`, { params: { days } }),
+};
+
+export default api;
