@@ -45,6 +45,10 @@ const StockActionsModal = ({ symbol, stockName, onClose }) => {
   // Ask question mutation
   const askMutation = useMutation({
     mutationFn: (q) => stocksApi.askQuestion(symbol, q),
+    onSuccess: () => {
+      // Clear the question input after successful submission
+      setQuestion('');
+    },
   });
 
   const handleActionClick = (action) => {
@@ -53,11 +57,19 @@ const StockActionsModal = ({ symbol, stockName, onClose }) => {
     if (action === 'get_insights') {
       insightsMutation.mutate();
     }
+
+    // Reset ask mutation when switching to ask_question action
+    if (action === 'ask_question') {
+      askMutation.reset();
+      setQuestion('');
+    }
   };
 
   const handleAskQuestion = (e) => {
     e.preventDefault();
     if (question.trim()) {
+      // Reset the mutation to clear previous answer before asking new question
+      askMutation.reset();
       askMutation.mutate(question);
     }
   };
