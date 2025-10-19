@@ -78,6 +78,7 @@ def create_position(position_data: PositionCreate, db: Session = Depends(get_db)
 
     # Get or create stock
     stock = db.query(Stock).filter(Stock.symbol == position_data.stock_symbol.upper()).first()
+    is_new_stock = False
 
     if not stock:
         # Fetch stock info from Alpha Vantage
@@ -90,6 +91,7 @@ def create_position(position_data: PositionCreate, db: Session = Depends(get_db)
             )
             db.add(stock)
             db.flush()  # Get stock ID without committing
+            is_new_stock = True
         except Exception as e:
             logger.error(f"Error fetching stock info: {str(e)}")
             raise HTTPException(
@@ -122,6 +124,31 @@ def create_position(position_data: PositionCreate, db: Session = Depends(get_db)
         db.refresh(position)
 
         logger.info(f"Created position: {stock.symbol} - {position_data.shares} shares @ ${position_data.average_cost}")
+
+        # If this is a new stock, fetch initial price data
+        if is_new_stock:
+            try:
+                logger.info(f"Fetching initial price data for new stock: {stock.symbol}")
+                prices = alpha_vantage.get_daily_prices(stock.symbol, outputsize="compact")
+
+                # Add price data to database
+                for price_data in prices:
+                    db_price = StockPrice(
+                        stock_id=stock.id,
+                        date=price_data["date"],
+                        open=price_data["open"],
+                        close=price_data["close"],
+                        high=price_data["high"],
+                        low=price_data["low"],
+                        volume=price_data["volume"]
+                    )
+                    db.add(db_price)
+
+                db.commit()
+                logger.info(f"Successfully added {len(prices)} price records for {stock.symbol}")
+            except Exception as e:
+                # Don't fail the position creation if price fetch fails
+                logger.warning(f"Could not fetch price data for {stock.symbol}: {str(e)}")
 
         return get_position_details(db, position)
 
