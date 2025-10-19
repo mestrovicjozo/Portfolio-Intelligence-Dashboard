@@ -1,57 +1,83 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Plus, RefreshCw, TrendingUp, TrendingDown, X } from 'lucide-react';
-import { stocksApi, queryApi } from '../services/api';
+import { Plus, TrendingUp, TrendingDown, X, MoreVertical } from 'lucide-react';
+import { positionsApi, portfoliosApi, stocksApi } from '../services/api';
+import StockActionsModal from '../components/StockActionsModal';
 import './Dashboard.css';
 
 function Dashboard() {
-  const [showAddStock, setShowAddStock] = useState(false);
+  const [showAddPosition, setShowAddPosition] = useState(false);
   const [newSymbol, setNewSymbol] = useState('');
+  const [newShares, setNewShares] = useState('');
+  const [newCost, setNewCost] = useState('');
+  const [selectedStock, setSelectedStock] = useState(null);
   const queryClient = useQueryClient();
 
-  const { data: stocks, isLoading: stocksLoading } = useQuery({
-    queryKey: ['stocks'],
+  // Fetch active portfolio
+  const { data: activePortfolio } = useQuery({
+    queryKey: ['active-portfolio'],
     queryFn: async () => {
-      const response = await stocksApi.getAll();
+      const response = await portfoliosApi.getActive();
       return response.data;
     },
   });
 
-  const { data: summary } = useQuery({
-    queryKey: ['portfolio-summary'],
+  // Fetch positions for active portfolio
+  const { data: positions = [], isLoading: positionsLoading } = useQuery({
+    queryKey: ['positions'],
     queryFn: async () => {
-      const response = await queryApi.getPortfolioSummary();
+      const response = await positionsApi.getAll();
       return response.data;
     },
   });
 
-  const addStockMutation = useMutation({
-    mutationFn: (symbol) => stocksApi.create({ symbol, name: symbol }),
+  // Add position mutation
+  const addPositionMutation = useMutation({
+    mutationFn: (positionData) => positionsApi.create(positionData),
     onSuccess: () => {
-      queryClient.invalidateQueries(['stocks']);
-      queryClient.invalidateQueries(['portfolio-summary']);
+      queryClient.invalidateQueries(['positions']);
+      queryClient.invalidateQueries(['active-portfolio']);
       setNewSymbol('');
-      setShowAddStock(false);
+      setNewShares('');
+      setNewCost('');
+      setShowAddPosition(false);
     },
   });
 
-  const deleteStockMutation = useMutation({
-    mutationFn: (symbol) => stocksApi.delete(symbol),
+  // Delete position mutation
+  const deletePositionMutation = useMutation({
+    mutationFn: (positionId) => positionsApi.delete(positionId),
     onSuccess: () => {
-      queryClient.invalidateQueries(['stocks']);
-      queryClient.invalidateQueries(['portfolio-summary']);
+      queryClient.invalidateQueries(['positions']);
+      queryClient.invalidateQueries(['active-portfolio']);
     },
   });
 
-  const handleAddStock = (e) => {
+  const handleAddPosition = (e) => {
     e.preventDefault();
-    if (newSymbol.trim()) {
-      addStockMutation.mutate(newSymbol.toUpperCase());
+    if (newSymbol.trim() && newShares && newCost) {
+      addPositionMutation.mutate({
+        stock_symbol: newSymbol.toUpperCase(),
+        shares: parseFloat(newShares),
+        average_cost: parseFloat(newCost),
+      });
     }
   };
 
-  if (stocksLoading) {
+  // Calculate portfolio stats
+  const totalGainers = positions.filter(p => p.gain_loss && p.gain_loss > 0).length;
+  const totalLosers = positions.filter(p => p.gain_loss && p.gain_loss < 0).length;
+  const topGainers = positions
+    .filter(p => p.gain_loss_percent)
+    .sort((a, b) => b.gain_loss_percent - a.gain_loss_percent)
+    .slice(0, 3);
+  const topLosers = positions
+    .filter(p => p.gain_loss_percent)
+    .sort((a, b) => a.gain_loss_percent - b.gain_loss_percent)
+    .slice(0, 3);
+
+  if (positionsLoading) {
     return <div className="loading"><div className="spinner"></div></div>;
   }
 
@@ -59,78 +85,175 @@ function Dashboard() {
     <div className="dashboard">
       <div className="container">
         <div className="dashboard-header">
-          <h1>Portfolio Dashboard</h1>
-          <button className="btn btn-primary" onClick={() => setShowAddStock(true)}>
+          <div>
+            <h1>{activePortfolio?.name || 'Portfolio Dashboard'}</h1>
+            {activePortfolio?.description && (
+              <p className="portfolio-description">{activePortfolio.description}</p>
+            )}
+          </div>
+          <button className="btn btn-primary" onClick={() => setShowAddPosition(true)}>
             <Plus size={20} />
-            Add Stock
+            Add Position
           </button>
         </div>
 
-        {summary && (
+        {activePortfolio && (
           <div className="summary-cards">
             <div className="card">
-              <h3>Total Stocks</h3>
-              <p className="metric">{summary.total_stocks}</p>
+              <h3>Total Value</h3>
+              <p className="metric">${activePortfolio.total_value.toLocaleString()}</p>
+              <p className="text-secondary">Cost: ${activePortfolio.total_cost.toLocaleString()}</p>
             </div>
-            {summary.sentiment_average !== null && (
-              <div className="card">
-                <h3>Average Sentiment</h3>
-                <p className={`metric ${summary.sentiment_average > 0 ? 'text-success' : 'text-danger'}`}>
-                  {summary.sentiment_average > 0 ? '+' : ''}{summary.sentiment_average.toFixed(3)}
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {summary?.top_gainers && summary.top_gainers.length > 0 && (
-          <div className="movers-section">
-            <h2>Top Gainers</h2>
-            <div className="movers-grid">
-              {summary.top_gainers.map((stock) => (
-                <div key={stock.symbol} className="mover-card gain">
-                  <div className="mover-header">
-                    <h4>{stock.symbol}</h4>
-                    <TrendingUp size={20} />
-                  </div>
-                  <p className="mover-price">${stock.price.toFixed(2)}</p>
-                  <p className="text-success">
-                    +{stock.change_percent.toFixed(2)}%
-                  </p>
-                </div>
-              ))}
+            <div className="card">
+              <h3>Total Gain/Loss</h3>
+              <p className={`metric ${activePortfolio.total_gain_loss >= 0 ? 'text-success' : 'text-danger'}`}>
+                {activePortfolio.total_gain_loss >= 0 ? '+' : ''}
+                ${Math.abs(activePortfolio.total_gain_loss).toLocaleString()}
+              </p>
+              <p className={activePortfolio.total_gain_loss_percent >= 0 ? 'text-success' : 'text-danger'}>
+                {activePortfolio.total_gain_loss_percent >= 0 ? '+' : ''}
+                {activePortfolio.total_gain_loss_percent}%
+              </p>
+            </div>
+            <div className="card">
+              <h3>Positions</h3>
+              <p className="metric">{activePortfolio.position_count}</p>
+              <p className="text-secondary">
+                {totalGainers} gainers • {totalLosers} losers
+              </p>
             </div>
           </div>
         )}
 
-        <div className="stocks-section">
-          <h2>Your Stocks</h2>
-          {stocks && stocks.length > 0 ? (
-            <div className="stocks-grid">
-              {stocks.map((stock) => (
-                <div key={stock.symbol} className="stock-card card">
-                  <div className="stock-header">
-                    <div>
-                      <Link to={`/stock/${stock.symbol}`} className="stock-symbol">
-                        {stock.symbol}
-                      </Link>
-                      <p className="stock-name text-secondary">{stock.name}</p>
+        <div className="movers-sections">
+          {topGainers.length > 0 && (
+            <div className="movers-section">
+              <h2>Top Gainers</h2>
+              <div className="movers-grid">
+                {topGainers.map((position) => (
+                  <div key={position.id} className="mover-card gain">
+                    <div className="mover-header">
+                      <h4>{position.stock.symbol}</h4>
+                      <TrendingUp size={20} />
                     </div>
-                    <button
-                      className="btn-icon"
-                      onClick={() => deleteStockMutation.mutate(stock.symbol)}
-                    >
-                      <X size={18} />
-                    </button>
+                    <p className="mover-price">${position.current_price?.toFixed(2)}</p>
+                    <p className="text-success">
+                      +{position.gain_loss_percent.toFixed(2)}%
+                    </p>
+                    <p className="mover-shares">
+                      {position.shares} shares • +${position.gain_loss.toFixed(2)}
+                    </p>
                   </div>
-                  {stock.current_price && (
-                    <div className="stock-price">
-                      <p className="price">${stock.current_price.toFixed(2)}</p>
-                      {stock.price_change && (
-                        <p className={stock.price_change >= 0 ? 'text-success' : 'text-danger'}>
-                          {stock.price_change >= 0 ? '+' : ''}
-                          {stock.price_change.toFixed(2)} ({stock.price_change_percent.toFixed(2)}%)
-                        </p>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {topLosers.length > 0 && (
+            <div className="movers-section">
+              <h2>Top Losers</h2>
+              <div className="movers-grid">
+                {topLosers.map((position) => (
+                  <div key={position.id} className="mover-card loss">
+                    <div className="mover-header">
+                      <h4>{position.stock.symbol}</h4>
+                      <TrendingDown size={20} />
+                    </div>
+                    <p className="mover-price">${position.current_price?.toFixed(2)}</p>
+                    <p className="text-danger">
+                      {position.gain_loss_percent.toFixed(2)}%
+                    </p>
+                    <p className="mover-shares">
+                      {position.shares} shares • ${position.gain_loss.toFixed(2)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="positions-section">
+          <h2>Your Positions</h2>
+          {positions && positions.length > 0 ? (
+            <div className="positions-grid">
+              {positions.map((position) => (
+                <div key={position.id} className="position-card card">
+                  <div className="position-header">
+                    <div className="position-info">
+                      <Link
+                        to={`/stock/${position.stock.symbol}`}
+                        className="stock-symbol"
+                      >
+                        {position.stock.symbol}
+                      </Link>
+                      <p className="stock-name text-secondary">{position.stock.name}</p>
+                    </div>
+                    <div className="position-actions">
+                      <button
+                        className="btn-icon"
+                        onClick={() => setSelectedStock({
+                          symbol: position.stock.symbol,
+                          name: position.stock.name
+                        })}
+                        title="Stock actions"
+                      >
+                        <MoreVertical size={18} />
+                      </button>
+                      <button
+                        className="btn-icon"
+                        onClick={() => {
+                          if (confirm(`Delete ${position.stock.symbol} position?`)) {
+                            deletePositionMutation.mutate(position.id);
+                          }
+                        }}
+                        title="Delete position"
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="position-details">
+                    <div className="detail-row">
+                      <span className="detail-label">Shares:</span>
+                      <span className="detail-value">{position.shares}</span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-label">Avg Cost:</span>
+                      <span className="detail-value">${position.average_cost.toFixed(2)}</span>
+                    </div>
+                    <div className="detail-row">
+                      <span className="detail-label">Current:</span>
+                      <span className="detail-value">
+                        ${position.current_price?.toFixed(2) || 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {position.current_value && (
+                    <div className="position-summary">
+                      <div className="summary-row">
+                        <span>Total Value:</span>
+                        <span className="value-amount">
+                          ${position.current_value.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="summary-row">
+                        <span>Gain/Loss:</span>
+                        <span className={position.gain_loss >= 0 ? 'text-success value-amount' : 'text-danger value-amount'}>
+                          {position.gain_loss >= 0 ? '+' : ''}
+                          ${Math.abs(position.gain_loss).toLocaleString()} ({position.gain_loss_percent.toFixed(2)}%)
+                        </span>
+                      </div>
+                      {position.day_change && (
+                        <div className="summary-row">
+                          <span>Today:</span>
+                          <span className={position.day_change >= 0 ? 'text-success' : 'text-danger'}>
+                            {position.day_change >= 0 ? '+' : ''}
+                            ${Math.abs(position.day_change).toFixed(2)} ({position.day_change_percent.toFixed(2)}%)
+                          </span>
+                        </div>
                       )}
                     </div>
                   )}
@@ -138,34 +261,75 @@ function Dashboard() {
               ))}
             </div>
           ) : (
-            <p className="text-secondary">No stocks in portfolio. Add your first stock to get started!</p>
+            <p className="text-secondary">No positions in this portfolio. Add your first position to get started!</p>
           )}
         </div>
 
-        {showAddStock && (
-          <div className="modal-overlay" onClick={() => setShowAddStock(false)}>
+        {showAddPosition && (
+          <div className="modal-overlay" onClick={() => setShowAddPosition(false)}>
             <div className="modal" onClick={(e) => e.stopPropagation()}>
-              <h2>Add Stock to Portfolio</h2>
-              <form onSubmit={handleAddStock}>
-                <input
-                  type="text"
-                  className="input"
-                  placeholder="Enter stock symbol (e.g., AAPL)"
-                  value={newSymbol}
-                  onChange={(e) => setNewSymbol(e.target.value)}
-                  autoFocus
-                />
+              <h2>Add Position to Portfolio</h2>
+              <form onSubmit={handleAddPosition}>
+                <div className="form-group">
+                  <label htmlFor="symbol">Stock Symbol</label>
+                  <input
+                    id="symbol"
+                    type="text"
+                    className="input"
+                    placeholder="e.g., AAPL"
+                    value={newSymbol}
+                    onChange={(e) => setNewSymbol(e.target.value)}
+                    autoFocus
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="shares">Number of Shares</label>
+                  <input
+                    id="shares"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    className="input"
+                    placeholder="e.g., 10"
+                    value={newShares}
+                    onChange={(e) => setNewShares(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label htmlFor="cost">Average Cost Per Share</label>
+                  <input
+                    id="cost"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    className="input"
+                    placeholder="e.g., 150.00"
+                    value={newCost}
+                    onChange={(e) => setNewCost(e.target.value)}
+                    required
+                  />
+                </div>
                 <div className="modal-actions">
-                  <button type="button" className="btn btn-secondary" onClick={() => setShowAddStock(false)}>
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowAddPosition(false)}>
                     Cancel
                   </button>
-                  <button type="submit" className="btn btn-primary" disabled={addStockMutation.isLoading}>
-                    {addStockMutation.isLoading ? 'Adding...' : 'Add Stock'}
+                  <button type="submit" className="btn btn-primary" disabled={addPositionMutation.isLoading}>
+                    {addPositionMutation.isLoading ? 'Adding...' : 'Add Position'}
                   </button>
                 </div>
               </form>
             </div>
           </div>
+        )}
+
+        {selectedStock && (
+          <StockActionsModal
+            symbol={selectedStock.symbol}
+            stockName={selectedStock.name}
+            onClose={() => setSelectedStock(null)}
+          />
         )}
       </div>
     </div>

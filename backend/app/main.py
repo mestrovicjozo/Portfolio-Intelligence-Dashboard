@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 
 from backend.app.core.config import settings
-from backend.app.api.routes import stocks, news, query
+from backend.app.api.routes import stocks, news, query, portfolios, positions, stock_actions
 from backend.app.db.base import engine, Base
 
 # Configure logging
@@ -33,7 +33,10 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(portfolios.router, prefix="/api/portfolios", tags=["portfolios"])
+app.include_router(positions.router, prefix="/api/positions", tags=["positions"])
 app.include_router(stocks.router, prefix="/api/stocks", tags=["stocks"])
+app.include_router(stock_actions.router, prefix="/api/stocks", tags=["stock-actions"])
 app.include_router(news.router, prefix="/api/news", tags=["news"])
 app.include_router(query.router, prefix="/api/query", tags=["query"])
 

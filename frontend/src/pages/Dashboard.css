@@ -12,6 +12,13 @@
 .dashboard-header h1 {
   font-size: 2rem;
   font-weight: 700;
+  margin: 0;
+}
+
+.portfolio-description {
+  margin: 0.5rem 0 0 0;
+  font-size: 0.95rem;
+  color: var(--color-text-secondary);
 }
 
 .summary-cards {
@@ -59,6 +66,23 @@
   border-color: var(--color-success);
 }
 
+.mover-card.loss {
+  border-color: var(--color-danger);
+}
+
+.mover-shares {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  margin-top: 0.5rem;
+}
+
+.movers-sections {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
 .mover-header {
   display: flex;
   justify-content: space-between;
@@ -77,35 +101,95 @@
   margin-bottom: 0.25rem;
 }
 
-.stocks-section {
+.positions-section {
   margin-top: 2rem;
 }
 
-.stocks-section h2 {
+.positions-section h2 {
   font-size: 1.5rem;
   margin-bottom: 1rem;
 }
 
-.stocks-grid {
+.positions-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: 1rem;
 }
 
-.stock-card {
+.position-card {
   transition: transform 0.2s, box-shadow 0.2s;
 }
 
-.stock-card:hover {
+.position-card:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
 }
 
-.stock-header {
+.position-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 1rem;
+}
+
+.position-info {
+  flex: 1;
+}
+
+.position-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.position-details {
+  background: var(--color-bg);
+  padding: 1rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0;
+}
+
+.detail-row:not(:last-child) {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.detail-label {
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.detail-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.position-summary {
+  padding-top: 1rem;
+  border-top: 2px solid var(--color-border);
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  font-size: 0.95rem;
+}
+
+.summary-row:last-child {
+  margin-bottom: 0;
+}
+
+.value-amount {
+  font-weight: 600;
 }
 
 .stock-symbol {
@@ -176,8 +260,21 @@
   gap: 1rem;
 }
 
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-group label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
 .modal-actions {
   display: flex;
   gap: 0.5rem;
   justify-content: flex-end;
+  margin-top: 0.5rem;
 }
