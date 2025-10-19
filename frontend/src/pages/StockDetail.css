@@ -1,0 +1,133 @@
+.stock-detail-page {
+  min-height: 100vh;
+  background: #f9fafb;
+  padding: 20px 0;
+}
+
+.stock-detail-page .container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #6b7280;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 20px;
+  transition: color 0.2s;
+}
+
+.back-link:hover {
+  color: #111827;
+}
+
+.stock-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 30px;
+  padding: 24px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.stock-detail-header h1 {
+  margin: 0 0 8px 0;
+  font-size: 32px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.stock-detail-header .text-secondary {
+  margin: 4px 0;
+  font-size: 16px;
+  color: #6b7280;
+}
+
+.stock-detail-price {
+  text-align: right;
+}
+
+.stock-detail-price .price {
+  font-size: 36px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 8px 0;
+}
+
+.stock-detail-price .text-success {
+  color: #10b981;
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.stock-detail-price .text-danger {
+  color: #ef4444;
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.stock-detail-page .card {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  border: 1px solid #e5e7eb;
+}
+
+.stock-detail-page .card h2 {
+  margin: 0 0 16px 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.stock-detail-page .card h3 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.stock-detail-page .card p {
+  margin: 8px 0;
+  font-size: 14px;
+  color: #374151;
+}
+
+.stock-detail-page .loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 400px;
+}
+
+.stock-detail-page .spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #f3f4f6;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.text-success {
+  color: #10b981;
+}
+
+.text-danger {
+  color: #ef4444;
+}
