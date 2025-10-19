@@ -1,17 +1,20 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Plus, TrendingUp, TrendingDown, X, MoreVertical } from 'lucide-react';
+import { Plus, TrendingUp, TrendingDown, X, MoreVertical, Upload } from 'lucide-react';
 import { positionsApi, portfoliosApi, stocksApi } from '../services/api';
 import StockActionsModal from '../components/StockActionsModal';
 import './Dashboard.css';
 
 function Dashboard() {
   const [showAddPosition, setShowAddPosition] = useState(false);
+  const [showImportCSV, setShowImportCSV] = useState(false);
   const [newSymbol, setNewSymbol] = useState('');
   const [newShares, setNewShares] = useState('');
   const [newCost, setNewCost] = useState('');
   const [selectedStock, setSelectedStock] = useState(null);
+  const [csvFile, setCsvFile] = useState(null);
+  const fileInputRef = useRef(null);
   const queryClient = useQueryClient();
 
   // Fetch active portfolio
@@ -54,6 +57,30 @@ function Dashboard() {
     },
   });
 
+  // Import CSV mutation
+  const importCSVMutation = useMutation({
+    mutationFn: (file) => positionsApi.importCSV(file),
+    onSuccess: (response) => {
+      queryClient.invalidateQueries(['positions']);
+      queryClient.invalidateQueries(['active-portfolio']);
+      setCsvFile(null);
+      setShowImportCSV(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+
+      // Show summary
+      const data = response.data;
+      alert(
+        `CSV Import Complete!\n\n` +
+        `Created: ${data.created} positions\n` +
+        `Updated: ${data.updated} positions\n` +
+        `Skipped: ${data.skipped} rows\n` +
+        (data.errors && data.errors.length > 0 ? `\nErrors:\n${data.errors.join('\n')}` : '')
+      );
+    },
+  });
+
   const handleAddPosition = (e) => {
     e.preventDefault();
     if (newSymbol.trim() && newShares && newCost) {
@@ -62,6 +89,23 @@ function Dashboard() {
         shares: parseFloat(newShares),
         average_cost: parseFloat(newCost),
       });
+    }
+  };
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file && file.name.endsWith('.csv')) {
+      setCsvFile(file);
+    } else {
+      alert('Please select a valid CSV file');
+      e.target.value = '';
+    }
+  };
+
+  const handleImportCSV = (e) => {
+    e.preventDefault();
+    if (csvFile) {
+      importCSVMutation.mutate(csvFile);
     }
   };
 
@@ -91,10 +135,16 @@ function Dashboard() {
               <p className="portfolio-description">{activePortfolio.description}</p>
             )}
           </div>
-          <button className="btn btn-primary" onClick={() => setShowAddPosition(true)}>
-            <Plus size={20} />
-            Add Position
-          </button>
+          <div className="dashboard-actions">
+            <button className="btn btn-secondary" onClick={() => setShowImportCSV(true)}>
+              <Upload size={20} />
+              Import CSV
+            </button>
+            <button className="btn btn-primary" onClick={() => setShowAddPosition(true)}>
+              <Plus size={20} />
+              Add Position
+            </button>
+          </div>
         </div>
 
         {activePortfolio && (
@@ -329,6 +379,53 @@ function Dashboard() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {showImportCSV && (
+          <div className="modal-overlay" onClick={() => setShowImportCSV(false)}>
+            <div className="modal" onClick={(e) => e.stopPropagation()}>
+              <h2>Import Portfolio from CSV</h2>
+              <p className="text-secondary" style={{ marginBottom: '1.5rem' }}>
+                Upload a CSV file exported from Trading 212 to import all your positions at once.
+              </p>
+              <form onSubmit={handleImportCSV}>
+                <div className="form-group">
+                  <label htmlFor="csv-file">Select CSV File</label>
+                  <input
+                    id="csv-file"
+                    type="file"
+                    accept=".csv"
+                    onChange={handleFileSelect}
+                    ref={fileInputRef}
+                    className="input"
+                    required
+                  />
+                  {csvFile && (
+                    <p className="file-name" style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#10b981' }}>
+                      Selected: {csvFile.name}
+                    </p>
+                  )}
+                </div>
+                <div className="modal-actions">
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowImportCSV(false)}>
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={!csvFile || importCSVMutation.isLoading}
+                  >
+                    {importCSVMutation.isLoading ? 'Importing...' : 'Import Positions'}
+                  </button>
+                </div>
+              </form>
+              {importCSVMutation.isLoading && (
+                <div style={{ marginTop: '1rem', textAlign: 'center', color: '#6b7280' }}>
+                  <p>Importing positions... This may take a moment as we fetch stock data.</p>
+                </div>
+              )}
             </div>
           </div>
         )}

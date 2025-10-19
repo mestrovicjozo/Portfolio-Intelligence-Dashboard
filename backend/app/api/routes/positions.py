@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List
 import logging
+import csv
+import io
 
 from backend.app.db.base import get_db
 from backend.app.models import Portfolio, Position, Stock, StockPrice, NewsArticle, ArticleStock
@@ -384,3 +386,165 @@ def get_position_details(db: Session, position: Position) -> PositionWithDetails
         day_change=round(day_change, 2) if day_change else None,
         day_change_percent=round(day_change_percent, 2) if day_change_percent else None,
     )
+
+
+@router.post("/import-csv", response_model=dict, status_code=status.HTTP_201_CREATED)
+async def import_positions_from_csv(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Import positions from a Trading 212 CSV export.
+
+    Expected CSV format:
+    Slice,Name,Invested value,Value,Result,Owned quantity,Dividends gained,Dividends cash,Dividends reinvested
+    AAPL,Apple Inc.,1000,1100,100,10,N/A,N/A,N/A
+    """
+    # Get active portfolio
+    portfolio = db.query(Portfolio).filter(Portfolio.is_active == True).first()
+
+    if not portfolio:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active portfolio found. Please create and activate a portfolio first."
+        )
+
+    # Validate file type
+    if not file.filename.endswith('.csv'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only CSV files are supported"
+        )
+
+    try:
+        # Read CSV file
+        contents = await file.read()
+        csv_data = contents.decode('utf-8')
+        csv_reader = csv.DictReader(io.StringIO(csv_data))
+
+        created_count = 0
+        updated_count = 0
+        skipped_count = 0
+        errors = []
+
+        for row_num, row in enumerate(csv_reader, start=2):  # Start at 2 (header is row 1)
+            try:
+                # Skip the "Total" row
+                if row.get('Slice', '').upper() == 'TOTAL':
+                    continue
+
+                symbol = row.get('Slice', '').strip().upper()
+                if not symbol:
+                    skipped_count += 1
+                    continue
+
+                # Parse shares and average cost
+                try:
+                    shares = float(row.get('Owned quantity', 0))
+                    invested_value = float(row.get('Invested value', 0))
+
+                    # Calculate average cost per share
+                    if shares > 0:
+                        average_cost = invested_value / shares
+                    else:
+                        skipped_count += 1
+                        errors.append(f"Row {row_num}: {symbol} has 0 shares, skipped")
+                        continue
+
+                except (ValueError, ZeroDivisionError) as e:
+                    skipped_count += 1
+                    errors.append(f"Row {row_num}: {symbol} - Invalid number format: {str(e)}")
+                    continue
+
+                # Get or create stock
+                stock = db.query(Stock).filter(Stock.symbol == symbol).first()
+                is_new_stock = False
+
+                if not stock:
+                    try:
+                        company_info = alpha_vantage.get_company_overview(symbol)
+                        stock = Stock(
+                            symbol=symbol,
+                            name=company_info.get("Name", row.get('Name', symbol)),
+                            sector=company_info.get("Sector", "Unknown")
+                        )
+                        db.add(stock)
+                        db.flush()
+                        is_new_stock = True
+                    except Exception as e:
+                        # Use name from CSV if API fails
+                        stock = Stock(
+                            symbol=symbol,
+                            name=row.get('Name', symbol),
+                            sector="Unknown"
+                        )
+                        db.add(stock)
+                        db.flush()
+                        is_new_stock = True
+
+                # Check if position already exists
+                existing_position = db.query(Position).filter(
+                    Position.portfolio_id == portfolio.id,
+                    Position.stock_id == stock.id
+                ).first()
+
+                if existing_position:
+                    # Update existing position
+                    existing_position.shares = shares
+                    existing_position.average_cost = average_cost
+                    updated_count += 1
+                else:
+                    # Create new position
+                    position = Position(
+                        portfolio_id=portfolio.id,
+                        stock_id=stock.id,
+                        shares=shares,
+                        average_cost=average_cost
+                    )
+                    db.add(position)
+                    created_count += 1
+
+                db.commit()
+
+                # Fetch price data for new stocks (in background, don't block CSV import)
+                if is_new_stock:
+                    try:
+                        logger.info(f"Fetching price data for new stock: {stock.symbol}")
+                        prices = alpha_vantage.get_daily_prices(stock.symbol, outputsize="compact")
+
+                        for price_data in prices:
+                            db_price = StockPrice(
+                                stock_id=stock.id,
+                                date=price_data["date"],
+                                open=price_data["open"],
+                                close=price_data["close"],
+                                high=price_data["high"],
+                                low=price_data["low"],
+                                volume=price_data["volume"]
+                            )
+                            db.add(db_price)
+
+                        db.commit()
+                    except Exception as e:
+                        logger.warning(f"Could not fetch price data for {stock.symbol}: {str(e)}")
+
+            except Exception as e:
+                logger.error(f"Error processing row {row_num}: {str(e)}")
+                errors.append(f"Row {row_num}: {str(e)}")
+                continue
+
+        return {
+            "message": "CSV import completed",
+            "created": created_count,
+            "updated": updated_count,
+            "skipped": skipped_count,
+            "errors": errors if errors else None
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error importing CSV: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error importing CSV: {str(e)}"
+        )

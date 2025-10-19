@@ -28,6 +28,15 @@ export const positionsApi = {
   update: (positionId, positionData) => api.put(`/positions/${positionId}`, positionData),
   addShares: (positionId, sharesData) => api.post(`/positions/${positionId}/add-shares`, sharesData),
   delete: (positionId) => api.delete(`/positions/${positionId}`),
+  importCSV: (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/positions/import-csv', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
 };
 
 // Stocks API

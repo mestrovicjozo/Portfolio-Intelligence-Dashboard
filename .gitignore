@@ -60,3 +60,6 @@ Thumbs.db
 **/secrets/
 *.key
 credentials.json
+
+# Project planning files
+next_steps.md
