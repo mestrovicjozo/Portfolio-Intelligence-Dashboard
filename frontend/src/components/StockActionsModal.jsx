@@ -9,7 +9,9 @@ import {
   X,
   Loader,
   ExternalLink,
+  BarChart3,
 } from 'lucide-react';
+import PriceChart from './PriceChart';
 import './StockActionsModal.css';
 
 const StockActionsModal = ({ symbol, stockName, onClose }) => {
@@ -62,6 +64,7 @@ const StockActionsModal = ({ symbol, stockName, onClose }) => {
 
   const getIcon = (iconName) => {
     const icons = {
+      'bar-chart-3': BarChart3,
       newspaper: Newspaper,
       brain: Brain,
       'trending-up': TrendingUp,
@@ -246,6 +249,13 @@ const StockActionsModal = ({ symbol, stockName, onClose }) => {
                       )}
                     </div>
                   )}
+                </div>
+              )}
+
+              {selectedAction === 'view_chart' && (
+                <div className="chart-view">
+                  <h3>Price Chart</h3>
+                  <PriceChart symbol={symbol} />
                 </div>
               )}
             </div>

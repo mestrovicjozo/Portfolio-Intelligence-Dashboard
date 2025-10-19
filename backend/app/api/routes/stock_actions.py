@@ -6,7 +6,7 @@ import logging
 from backend.app.db.base import get_db
 from backend.app.models import Stock, NewsArticle, ArticleStock
 from backend.app.schemas.news_article import NewsArticle as NewsArticleSchema
-from backend.app.services.gemini import GeminiService
+from backend.app.services.gemini_service import GeminiService
 from backend.app.core.config import settings
 from pydantic import BaseModel
 
@@ -36,6 +36,12 @@ class StockAction(BaseModel):
 def get_stock_actions(symbol: str):
     """Get available actions for a stock."""
     actions = [
+        StockAction(
+            action="view_chart",
+            label="Price Chart",
+            description="View historical price charts (1D, 7D, 30D)",
+            icon="bar-chart-3"
+        ),
         StockAction(
             action="view_articles",
             label="Read Articles",

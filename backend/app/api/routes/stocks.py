@@ -180,6 +180,39 @@ def refresh_stock_data(symbol: str, db: Session = Depends(get_db)):
         )
 
 
+@router.get("/{symbol}/prices")
+def get_stock_prices(symbol: str, days: int = 30, db: Session = Depends(get_db)):
+    """Get historical price data for a stock."""
+    stock = db.query(Stock).filter(Stock.symbol == symbol.upper()).first()
+    if not stock:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Stock {symbol} not found"
+        )
+
+    # Calculate date range
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=days)
+
+    # Fetch prices from database
+    prices = db.query(StockPrice).filter(
+        StockPrice.stock_id == stock.id,
+        StockPrice.date >= start_date
+    ).order_by(StockPrice.date.asc()).all()
+
+    return [
+        {
+            "date": price.date.isoformat(),
+            "open": price.open,
+            "close": price.close,
+            "high": price.high,
+            "low": price.low,
+            "volume": price.volume
+        }
+        for price in prices
+    ]
+
+
 @router.get("/{symbol}/search")
 def search_stock_symbol(keywords: str):
     """Search for stock symbols by company name."""

@@ -3,6 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { stocksApi, queryApi, newsApi } from '../services/api';
+import PriceChart from '../components/PriceChart';
+import './StockDetail.css';
 
 function StockDetail() {
   const { symbol } = useParams();
@@ -63,6 +65,8 @@ function StockDetail() {
                 </div>
               )}
             </div>
+
+            <PriceChart symbol={symbol} />
 
             {sentiment && (
               <div className="card" style={{ marginTop: '2rem' }}>
