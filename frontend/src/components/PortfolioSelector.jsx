@@ -8,8 +8,12 @@ const PortfolioSelector = () => {
   const queryClient = useQueryClient();
   const [showDropdown, setShowDropdown] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingPortfolio, setEditingPortfolio] = useState(null);
   const [newPortfolioName, setNewPortfolioName] = useState('');
   const [newPortfolioDesc, setNewPortfolioDesc] = useState('');
+  const [editPortfolioName, setEditPortfolioName] = useState('');
+  const [editPortfolioDesc, setEditPortfolioDesc] = useState('');
 
   // Fetch all portfolios
   const { data: portfolios = [], isLoading } = useQuery({
@@ -51,6 +55,19 @@ const PortfolioSelector = () => {
     },
   });
 
+  // Update portfolio mutation
+  const updateMutation = useMutation({
+    mutationFn: ({ portfolioId, data }) => portfoliosApi.update(portfolioId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['portfolios']);
+      queryClient.invalidateQueries(['active-portfolio']);
+      setShowEditModal(false);
+      setEditingPortfolio(null);
+      setEditPortfolioName('');
+      setEditPortfolioDesc('');
+    },
+  });
+
   // Delete portfolio mutation
   const deleteMutation = useMutation({
     mutationFn: (portfolioId) => portfoliosApi.delete(portfolioId),
@@ -68,6 +85,27 @@ const PortfolioSelector = () => {
         description: newPortfolioDesc.trim() || null,
       });
     }
+  };
+
+  const handleEditPortfolio = (e) => {
+    e.preventDefault();
+    if (editingPortfolio && editPortfolioName.trim()) {
+      updateMutation.mutate({
+        portfolioId: editingPortfolio.id,
+        data: {
+          name: editPortfolioName.trim(),
+          description: editPortfolioDesc.trim() || null,
+        },
+      });
+    }
+  };
+
+  const openEditModal = (portfolio) => {
+    setEditingPortfolio(portfolio);
+    setEditPortfolioName(portfolio.name);
+    setEditPortfolioDesc(portfolio.description || '');
+    setShowEditModal(true);
+    setShowDropdown(false);
   };
 
   if (isLoading) {
@@ -130,18 +168,28 @@ const PortfolioSelector = () => {
                       )}
                     </div>
                   </button>
-                  {portfolios.length > 1 && (
+                  <div className="portfolio-item-actions">
                     <button
-                      className="btn-delete-portfolio"
-                      onClick={() => {
-                        if (confirm(`Delete portfolio "${portfolio.name}"?`)) {
-                          deleteMutation.mutate(portfolio.id);
-                        }
-                      }}
+                      className="btn-edit-portfolio"
+                      onClick={() => openEditModal(portfolio)}
+                      title="Rename portfolio"
                     >
-                      <Trash2 size={16} />
+                      <Edit2 size={16} />
                     </button>
-                  )}
+                    {portfolios.length > 1 && (
+                      <button
+                        className="btn-delete-portfolio"
+                        onClick={() => {
+                          if (confirm(`Delete portfolio "${portfolio.name}"?`)) {
+                            deleteMutation.mutate(portfolio.id);
+                          }
+                        }}
+                        title="Delete portfolio"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -192,6 +240,56 @@ const PortfolioSelector = () => {
                 </button>
                 <button type="submit" className="btn-primary" disabled={createMutation.isLoading}>
                   {createMutation.isLoading ? 'Creating...' : 'Create Portfolio'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </>
+      )}
+
+      {showEditModal && (
+        <>
+          <div className="modal-overlay" onClick={() => setShowEditModal(false)} />
+          <div className="modal">
+            <div className="modal-header">
+              <h2>Rename Portfolio</h2>
+              <button className="modal-close" onClick={() => setShowEditModal(false)}>
+                ×
+              </button>
+            </div>
+            <form onSubmit={handleEditPortfolio}>
+              <div className="form-group">
+                <label htmlFor="edit-portfolio-name">Portfolio Name *</label>
+                <input
+                  id="edit-portfolio-name"
+                  type="text"
+                  value={editPortfolioName}
+                  onChange={(e) => setEditPortfolioName(e.target.value)}
+                  placeholder="e.g., Tech Stocks, Dividend Portfolio"
+                  required
+                  autoFocus
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="edit-portfolio-desc">Description</label>
+                <textarea
+                  id="edit-portfolio-desc"
+                  value={editPortfolioDesc}
+                  onChange={(e) => setEditPortfolioDesc(e.target.value)}
+                  placeholder="Optional description"
+                  rows={3}
+                />
+              </div>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={() => setShowEditModal(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn-primary" disabled={updateMutation.isLoading}>
+                  {updateMutation.isLoading ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </form>

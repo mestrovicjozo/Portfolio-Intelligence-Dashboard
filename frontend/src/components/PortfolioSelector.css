@@ -160,14 +160,32 @@
   color: #6b7280;
 }
 
+.portfolio-item-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.btn-edit-portfolio,
 .btn-delete-portfolio {
   padding: 8px;
   background: none;
   border: none;
-  color: #ef4444;
   cursor: pointer;
   border-radius: 4px;
   transition: background 0.2s;
+}
+
+.btn-edit-portfolio {
+  color: #3b82f6;
+}
+
+.btn-edit-portfolio:hover {
+  background: #dbeafe;
+}
+
+.btn-delete-portfolio {
+  color: #ef4444;
 }
 
 .btn-delete-portfolio:hover {
