@@ -16,6 +16,7 @@ from backend.app.schemas.position import (
 )
 from backend.app.schemas.stock import Stock as StockSchema
 from backend.app.services.alpha_vantage import AlphaVantageService
+from backend.app.services.yahoo_finance import YahooFinanceService
 from backend.app.services.gemini_service import GeminiService
 from backend.app.services.vector_store import VectorStoreService
 from backend.app.core.config import settings
@@ -25,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 alpha_vantage = AlphaVantageService(settings.ALPHA_VANTAGE_API_KEY)
+yahoo_finance = YahooFinanceService()
 gemini_service = GeminiService()
 vector_store = VectorStoreService()
 
@@ -520,27 +522,55 @@ async def import_positions_from_csv(
 
                 db.commit()
 
-                # Fetch price data for new stocks (in background, don't block CSV import)
-                if is_new_stock:
+                # Fetch price data for new stocks OR stocks without price data
+                existing_price_count = db.query(StockPrice).filter(StockPrice.stock_id == stock.id).count()
+                needs_price_data = is_new_stock or existing_price_count == 0
+
+                if needs_price_data:
+                    prices = []
+
+                    # Try Alpha Vantage first
                     try:
-                        logger.info(f"Fetching price data for new stock: {stock.symbol}")
+                        logger.info(f"Fetching price data for stock: {stock.symbol} (new={is_new_stock}, existing_prices={existing_price_count})")
                         prices = alpha_vantage.get_daily_prices(stock.symbol, outputsize="compact")
-
-                        for price_data in prices:
-                            db_price = StockPrice(
-                                stock_id=stock.id,
-                                date=price_data["date"],
-                                open=price_data["open"],
-                                close=price_data["close"],
-                                high=price_data["high"],
-                                low=price_data["low"],
-                                volume=price_data["volume"]
-                            )
-                            db.add(db_price)
-
-                        db.commit()
+                        logger.info(f"Alpha Vantage: Received {len(prices)} price records for {stock.symbol}")
                     except Exception as e:
-                        logger.warning(f"Could not fetch price data for {stock.symbol}: {str(e)}")
+                        # If Alpha Vantage fails (rate limit), try Yahoo Finance as fallback
+                        logger.warning(f"Alpha Vantage failed for {stock.symbol}: {str(e)}")
+                        logger.info(f"Trying Yahoo Finance fallback for {stock.symbol}")
+                        try:
+                            prices = yahoo_finance.get_daily_prices(stock.symbol, days=100)
+                            if prices:
+                                logger.info(f"Yahoo Finance: Received {len(prices)} price records for {stock.symbol}")
+                            else:
+                                logger.warning(f"Yahoo Finance returned no data for {stock.symbol}")
+                        except Exception as yf_error:
+                            logger.error(f"Yahoo Finance also failed for {stock.symbol}: {str(yf_error)}")
+
+                    # Save price data if we got any
+                    if prices:
+                        try:
+                            price_count = 0
+                            for price_data in prices:
+                                db_price = StockPrice(
+                                    stock_id=stock.id,
+                                    date=price_data["date"],
+                                    open=price_data["open"],
+                                    close=price_data["close"],
+                                    high=price_data["high"],
+                                    low=price_data["low"],
+                                    volume=price_data["volume"]
+                                )
+                                db.add(db_price)
+                                price_count += 1
+
+                            db.commit()
+                            logger.info(f"Successfully committed {price_count} price records for {stock.symbol}")
+                        except Exception as save_error:
+                            logger.error(f"Failed to save price data for {stock.symbol}: {str(save_error)}")
+                            logger.exception(save_error)
+                    else:
+                        logger.warning(f"No price data available for {stock.symbol} from any source")
 
             except Exception as e:
                 logger.error(f"Error processing row {row_num}: {str(e)}")

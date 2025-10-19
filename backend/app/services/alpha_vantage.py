@@ -71,7 +71,17 @@ class AlphaVantageService:
         }
 
         data = self._make_request(params)
+
+        # Check for rate limit or API notes
+        if "Note" in data:
+            logger.error(f"Alpha Vantage API rate limit for {symbol}: {data['Note']}")
+            raise ValueError(f"API rate limit reached: {data['Note']}")
+
         time_series = data.get("Time Series (Daily)", {})
+
+        if not time_series:
+            logger.error(f"No time series data returned for {symbol}. Response keys: {list(data.keys())}")
+            raise ValueError(f"No price data available for {symbol}")
 
         prices = []
         for date_str, values in time_series.items():
