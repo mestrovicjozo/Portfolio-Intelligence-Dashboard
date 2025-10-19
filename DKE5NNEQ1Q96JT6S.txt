@@ -1,2 +1,0 @@
-DKE5NNEQ1Q96JT6S
-https://mcp.alphavantage.co/mcp?apikey=YOUR_API_KEY
