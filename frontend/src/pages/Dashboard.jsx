@@ -265,6 +265,15 @@ function Dashboard() {
           )}
         </div>
 
+        <div className="disclaimer">
+          <p>
+            <strong>Disclaimer:</strong> This dashboard provides information and insights based on market data and news analysis.
+            It is not financial advice and does not guarantee future price movements or investment outcomes.
+            Past performance does not indicate future results. Always conduct your own research and consult with a qualified
+            financial advisor before making investment decisions.
+          </p>
+        </div>
+
         {showAddPosition && (
           <div className="modal-overlay" onClick={() => setShowAddPosition(false)}>
             <div className="modal" onClick={(e) => e.stopPropagation()}>
