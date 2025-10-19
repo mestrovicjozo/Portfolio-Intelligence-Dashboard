@@ -111,6 +111,35 @@ Text to analyze:
                 "confidence": 0.0
             }
 
+    def is_finance_related(self, question: str) -> bool:
+        """
+        Check if a question is related to finance, stocks, or investing.
+
+        Args:
+            question: User's question
+
+        Returns:
+            True if finance-related, False otherwise
+        """
+        prompt = f"""Determine if the following question is related to finance, stocks, investing, markets, economy, or business.
+
+Question: {question}
+
+Respond with ONLY "YES" or "NO".
+- YES if the question is about finance, stocks, companies, investing, markets, economy, business, trading, or portfolio management
+- NO if the question is about weather, sports, entertainment, general knowledge, or any non-financial topic
+
+Response:"""
+
+        try:
+            response = self.model.generate_content(prompt)
+            result = response.text.strip().upper()
+            return result == "YES"
+        except Exception as e:
+            logger.error(f"Error checking question relevance: {e}")
+            # Default to allowing the question if check fails
+            return True
+
     def answer_question(self, question: str, context: List[Dict[str, Any]]) -> str:
         """
         Answer a question based on provided context using Gemini.
@@ -122,6 +151,10 @@ Text to analyze:
         Returns:
             Generated answer string
         """
+        # Check if question is finance-related
+        if not self.is_finance_related(question):
+            return "I'm sorry, but I can only answer questions related to finance, stocks, investing, and your portfolio. Please ask a question about financial markets, companies, or your investments."
+
         # Build context string from articles
         context_str = ""
         for idx, item in enumerate(context, 1):
@@ -137,6 +170,9 @@ Text to analyze:
         prompt = f"""You are a financial analyst assistant helping investors understand their portfolio.
 Answer the following question based on the provided news articles and context.
 
+IMPORTANT: Only answer questions related to finance, stocks, markets, and investing.
+If asked about non-financial topics, politely decline.
+
 Question: {question}
 
 Context from recent news articles:
@@ -148,6 +184,7 @@ Instructions:
 - Include specific details from the articles when relevant
 - Mention sentiment trends if applicable
 - Be objective and factual
+- Only answer finance-related questions
 
 Answer:
 """
