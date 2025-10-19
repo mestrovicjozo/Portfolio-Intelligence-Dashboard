@@ -14,6 +14,7 @@ function Dashboard() {
   const [newCost, setNewCost] = useState('');
   const [selectedStock, setSelectedStock] = useState(null);
   const [csvFile, setCsvFile] = useState(null);
+  const [expandedPosition, setExpandedPosition] = useState(null);
   const fileInputRef = useRef(null);
   const queryClient = useQueryClient();
 
@@ -226,89 +227,115 @@ function Dashboard() {
         <div className="positions-section">
           <h2>Your Positions</h2>
           {positions && positions.length > 0 ? (
-            <div className="positions-grid">
-              {positions.map((position) => (
-                <div key={position.id} className="position-card card">
-                  <div className="position-header">
-                    <div className="position-info">
-                      <Link
-                        to={`/stock/${position.stock.symbol}`}
-                        className="stock-symbol"
-                      >
-                        {position.stock.symbol}
-                      </Link>
-                      <p className="stock-name text-secondary">{position.stock.name}</p>
-                    </div>
-                    <div className="position-actions">
-                      <button
-                        className="btn-icon"
-                        onClick={() => setSelectedStock({
-                          symbol: position.stock.symbol,
-                          name: position.stock.name
-                        })}
-                        title="Stock actions"
-                      >
-                        <MoreVertical size={18} />
-                      </button>
-                      <button
-                        className="btn-icon"
-                        onClick={() => {
-                          if (confirm(`Delete ${position.stock.symbol} position?`)) {
-                            deletePositionMutation.mutate(position.id);
-                          }
-                        }}
-                        title="Delete position"
-                      >
-                        <X size={18} />
-                      </button>
-                    </div>
-                  </div>
+            <div className="positions-compact-list">
+              {positions.map((position) => {
+                const isExpanded = expandedPosition === position.id;
+                const gainLossClass = position.gain_loss >= 0 ? 'gain' : 'loss';
 
-                  <div className="position-details">
-                    <div className="detail-row">
-                      <span className="detail-label">Shares:</span>
-                      <span className="detail-value">{position.shares}</span>
-                    </div>
-                    <div className="detail-row">
-                      <span className="detail-label">Avg Cost:</span>
-                      <span className="detail-value">${position.average_cost.toFixed(2)}</span>
-                    </div>
-                    <div className="detail-row">
-                      <span className="detail-label">Current:</span>
-                      <span className="detail-value">
-                        ${position.current_price?.toFixed(2) || 'N/A'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {position.current_value && (
-                    <div className="position-summary">
-                      <div className="summary-row">
-                        <span>Total Value:</span>
-                        <span className="value-amount">
-                          ${position.current_value.toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="summary-row">
-                        <span>Gain/Loss:</span>
-                        <span className={position.gain_loss >= 0 ? 'text-success value-amount' : 'text-danger value-amount'}>
-                          {position.gain_loss >= 0 ? '+' : ''}
-                          ${Math.abs(position.gain_loss).toLocaleString()} ({position.gain_loss_percent.toFixed(2)}%)
-                        </span>
-                      </div>
-                      {position.day_change && (
-                        <div className="summary-row">
-                          <span>Today:</span>
-                          <span className={position.day_change >= 0 ? 'text-success' : 'text-danger'}>
-                            {position.day_change >= 0 ? '+' : ''}
-                            ${Math.abs(position.day_change).toFixed(2)} ({position.day_change_percent.toFixed(2)}%)
-                          </span>
+                return (
+                  <div key={position.id} className={`position-compact card ${isExpanded ? 'expanded' : ''}`}>
+                    <button
+                      className="position-compact-header"
+                      onClick={() => setExpandedPosition(isExpanded ? null : position.id)}
+                    >
+                      <div className="position-compact-left">
+                        <div className="stock-logo">
+                          <span className="stock-logo-text">{position.stock.symbol.substring(0, 2)}</span>
                         </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
+                        <div className="position-compact-info">
+                          <h3 className="position-compact-symbol">{position.stock.symbol}</h3>
+                          <p className="position-compact-name">{position.stock.name}</p>
+                        </div>
+                      </div>
+                      <div className="position-compact-right">
+                        <div className="position-compact-value">
+                          <p className="position-compact-price">${position.current_price?.toFixed(2) || 'N/A'}</p>
+                          {position.gain_loss !== null && (
+                            <p className={`position-compact-change ${gainLossClass}`}>
+                              {position.gain_loss >= 0 ? '+' : ''}${Math.abs(position.gain_loss).toFixed(2)}
+                              <span className="change-percent"> ({position.gain_loss_percent?.toFixed(2)}%)</span>
+                            </p>
+                          )}
+                        </div>
+                        <div className="position-expand-icon">
+                          {isExpanded ? '−' : '+'}
+                        </div>
+                      </div>
+                    </button>
+
+                    {isExpanded && (
+                      <div className="position-expanded-content">
+                        <div className="position-details-grid">
+                          <div className="detail-item">
+                            <span className="detail-label">Shares</span>
+                            <span className="detail-value">{position.shares}</span>
+                          </div>
+                          <div className="detail-item">
+                            <span className="detail-label">Avg Cost</span>
+                            <span className="detail-value">${position.average_cost.toFixed(2)}</span>
+                          </div>
+                          <div className="detail-item">
+                            <span className="detail-label">Current Price</span>
+                            <span className="detail-value">${position.current_price?.toFixed(2) || 'N/A'}</span>
+                          </div>
+                          <div className="detail-item">
+                            <span className="detail-label">Total Cost</span>
+                            <span className="detail-value">${position.total_cost.toFixed(2)}</span>
+                          </div>
+                          {position.current_value && (
+                            <div className="detail-item">
+                              <span className="detail-label">Total Value</span>
+                              <span className="detail-value">${position.current_value.toFixed(2)}</span>
+                            </div>
+                          )}
+                          {position.day_change && (
+                            <div className="detail-item">
+                              <span className="detail-label">Day Change</span>
+                              <span className={position.day_change >= 0 ? 'text-success' : 'text-danger'}>
+                                {position.day_change >= 0 ? '+' : ''}${Math.abs(position.day_change).toFixed(2)} ({position.day_change_percent?.toFixed(2)}%)
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="position-expanded-actions">
+                          <Link
+                            to={`/stock/${position.stock.symbol}`}
+                            className="btn btn-secondary btn-sm"
+                          >
+                            View Details
+                          </Link>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedStock({
+                                symbol: position.stock.symbol,
+                                name: position.stock.name
+                              });
+                            }}
+                          >
+                            <MoreVertical size={16} />
+                            Actions
+                          </button>
+                          <button
+                            className="btn btn-danger btn-sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm(`Delete ${position.stock.symbol} position?`)) {
+                                deletePositionMutation.mutate(position.id);
+                              }
+                            }}
+                          >
+                            <X size={16} />
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <p className="text-secondary">No positions in this portfolio. Add your first position to get started!</p>
@@ -434,8 +461,16 @@ function Dashboard() {
                 </div>
               </form>
               {importCSVMutation.isLoading && (
-                <div style={{ marginTop: '1rem', textAlign: 'center', color: '#6b7280' }}>
-                  <p>Importing positions... This may take a moment as we fetch stock data.</p>
+                <div className="import-progress">
+                  <div className="progress-header">
+                    <p>Importing positions...</p>
+                    <p className="progress-subtext">Fetching stock data and price history. This may take a moment.</p>
+                  </div>
+                  <div className="progress-bar-container">
+                    <div className="progress-bar">
+                      <div className="progress-bar-fill"></div>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
