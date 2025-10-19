@@ -28,6 +28,15 @@ alpha_vantage = AlphaVantageService(settings.ALPHA_VANTAGE_API_KEY)
 gemini_service = GeminiService()
 vector_store = VectorStoreService()
 
+# Trading 212 ticker symbol mapping to standard US tickers
+TRADING212_SYMBOL_MAP = {
+    "NVD": "NVDA",    # Nvidia
+    "MSF": "MSFT",    # Microsoft
+    "ORC": "ORCL",    # Oracle
+    "PTX": "PLTR",    # Palantir
+    # Add more mappings as needed
+}
+
 
 @router.get("/", response_model=List[PositionWithDetails])
 def get_positions(portfolio_id: int = None, db: Session = Depends(get_db)):
@@ -438,6 +447,11 @@ async def import_positions_from_csv(
                     skipped_count += 1
                     continue
 
+                # Map Trading 212 symbol to standard ticker if needed
+                standard_symbol = TRADING212_SYMBOL_MAP.get(symbol, symbol)
+                if symbol != standard_symbol:
+                    logger.info(f"Mapped Trading 212 symbol {symbol} to {standard_symbol}")
+
                 # Parse shares and average cost
                 try:
                     shares = float(row.get('Owned quantity', 0))
@@ -456,16 +470,16 @@ async def import_positions_from_csv(
                     errors.append(f"Row {row_num}: {symbol} - Invalid number format: {str(e)}")
                     continue
 
-                # Get or create stock
-                stock = db.query(Stock).filter(Stock.symbol == symbol).first()
+                # Get or create stock (use standard symbol for database/API)
+                stock = db.query(Stock).filter(Stock.symbol == standard_symbol).first()
                 is_new_stock = False
 
                 if not stock:
                     try:
-                        company_info = alpha_vantage.get_company_overview(symbol)
+                        company_info = alpha_vantage.get_company_overview(standard_symbol)
                         stock = Stock(
-                            symbol=symbol,
-                            name=company_info.get("Name", row.get('Name', symbol)),
+                            symbol=standard_symbol,
+                            name=company_info.get("Name", row.get('Name', standard_symbol)),
                             sector=company_info.get("Sector", "Unknown")
                         )
                         db.add(stock)
@@ -474,8 +488,8 @@ async def import_positions_from_csv(
                     except Exception as e:
                         # Use name from CSV if API fails
                         stock = Stock(
-                            symbol=symbol,
-                            name=row.get('Name', symbol),
+                            symbol=standard_symbol,
+                            name=row.get('Name', standard_symbol),
                             sector="Unknown"
                         )
                         db.add(stock)
