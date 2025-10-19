@@ -4,7 +4,7 @@ from typing import List
 import logging
 
 from backend.app.db.base import get_db
-from backend.app.models import Portfolio, Position, Stock, StockPrice
+from backend.app.models import Portfolio, Position, Stock, StockPrice, NewsArticle, ArticleStock
 from backend.app.schemas.position import (
     Position as PositionSchema,
     PositionCreate,
@@ -14,12 +14,17 @@ from backend.app.schemas.position import (
 )
 from backend.app.schemas.stock import Stock as StockSchema
 from backend.app.services.alpha_vantage import AlphaVantageService
+from backend.app.services.gemini_service import GeminiService
+from backend.app.services.vector_store import VectorStoreService
 from backend.app.core.config import settings
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 alpha_vantage = AlphaVantageService(settings.ALPHA_VANTAGE_API_KEY)
+gemini_service = GeminiService()
+vector_store = VectorStoreService()
 
 
 @router.get("/", response_model=List[PositionWithDetails])
@@ -125,7 +130,7 @@ def create_position(position_data: PositionCreate, db: Session = Depends(get_db)
 
         logger.info(f"Created position: {stock.symbol} - {position_data.shares} shares @ ${position_data.average_cost}")
 
-        # If this is a new stock, fetch initial price data
+        # If this is a new stock, fetch initial price data and news articles
         if is_new_stock:
             try:
                 logger.info(f"Fetching initial price data for new stock: {stock.symbol}")
@@ -149,6 +154,73 @@ def create_position(position_data: PositionCreate, db: Session = Depends(get_db)
             except Exception as e:
                 # Don't fail the position creation if price fetch fails
                 logger.warning(f"Could not fetch price data for {stock.symbol}: {str(e)}")
+
+            # Fetch news articles from the last week
+            try:
+                logger.info(f"Fetching news articles for new stock: {stock.symbol}")
+                # Calculate time_from as 1 week ago in YYYYMMDDTHHMM format
+                one_week_ago = datetime.now() - timedelta(days=7)
+                time_from = one_week_ago.strftime("%Y%m%dT%H%M")
+
+                news_items = alpha_vantage.get_news_sentiment(
+                    tickers=stock.symbol,
+                    time_from=time_from,
+                    limit=50
+                )
+
+                news_count = 0
+                for item in news_items:
+                    # Check if article already exists
+                    existing = db.query(NewsArticle).filter(
+                        NewsArticle.url == item["url"]
+                    ).first()
+
+                    if not existing and stock.symbol in item.get("ticker_sentiment", {}):
+                        # Create new article
+                        article = NewsArticle(
+                            title=item["title"],
+                            source=item["source"],
+                            url=item["url"],
+                            published_at=item["published_at"],
+                            summary=item["summary"],
+                            sentiment_score=item["overall_sentiment_score"]
+                        )
+                        db.add(article)
+                        db.flush()  # Get article ID
+
+                        # Link to stock
+                        article_stock = ArticleStock(
+                            article_id=article.id,
+                            stock_id=stock.id
+                        )
+                        db.add(article_stock)
+
+                        # Generate embedding and add to vector store
+                        try:
+                            content = f"{item['title']}. {item['summary']}"
+                            embedding = gemini_service.generate_embedding(content)
+                            vector_store.add_article(
+                                article_id=article.id,
+                                content=content,
+                                embedding=embedding,
+                                metadata={
+                                    "title": item["title"],
+                                    "source": item["source"],
+                                    "published_at": str(item["published_at"]),
+                                    "sentiment_score": item["overall_sentiment_score"],
+                                    "stocks": [stock.symbol]
+                                }
+                            )
+                        except Exception as e:
+                            logger.warning(f"Could not add article to vector store: {str(e)}")
+
+                        news_count += 1
+
+                db.commit()
+                logger.info(f"Successfully added {news_count} news articles for {stock.symbol}")
+            except Exception as e:
+                # Don't fail the position creation if news fetch fails
+                logger.warning(f"Could not fetch news articles for {stock.symbol}: {str(e)}")
 
         return get_position_details(db, position)
 
