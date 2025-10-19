@@ -132,20 +132,19 @@ def get_stock_insights(symbol: str, db: Session = Depends(get_db)):
             articles.append(article)
 
     # Create context from articles
-    context = f"Stock: {stock.name} ({stock.symbol})\n"
-    context += f"Sector: {stock.sector}\n\n"
-    context += "Recent News Articles:\n\n"
-
+    context_list = []
     for article in articles:
-        context += f"Title: {article.title}\n"
-        context += f"Summary: {article.summary}\n"
-        context += f"Sentiment: {article.sentiment_score}\n"
-        context += f"Published: {article.published_at}\n\n"
+        context_list.append({
+            "title": article.title,
+            "source": article.source or "Unknown",
+            "published_at": str(article.published_at) if article.published_at else None,
+            "summary": article.summary,
+            "sentiment_score": article.sentiment_score,
+            "stocks": [stock.symbol]
+        })
 
     # Generate insights using Gemini
-    prompt = f"""Based on the following information about {stock.symbol}, provide a comprehensive analysis:
-
-{context}
+    prompt = f"""Based on the following information about {stock.name} ({stock.symbol}), a {stock.sector} stock, provide a comprehensive analysis.
 
 Please provide:
 1. A brief summary (2-3 sentences) of the overall situation
@@ -156,7 +155,7 @@ Please provide:
 Format your response as JSON with keys: summary, key_points (array), sentiment, recommendation"""
 
     try:
-        response = gemini_service.answer_question(prompt, context)
+        response = gemini_service.answer_question(prompt, context_list)
 
         # Try to parse as JSON, fallback to structured text
         import json
@@ -219,17 +218,22 @@ def ask_about_stock(
             "sources": []
         }
 
-    # Create context
-    context = f"Stock: {stock.name} ({stock.symbol})\n"
-    context += f"Sector: {stock.sector}\n\n"
-    context += "Recent News:\n\n"
-
+    # Create context from articles
+    context_list = []
     for article in articles:
-        context += f"- {article.title}\n  {article.summary}\n\n"
+        context_list.append({
+            "title": article.title,
+            "source": article.source or "Unknown",
+            "published_at": str(article.published_at) if article.published_at else None,
+            "summary": article.summary,
+            "sentiment_score": article.sentiment_score,
+            "stocks": [stock.symbol],
+            "url": article.url
+        })
 
     # Get answer from Gemini
     try:
-        answer = gemini_service.answer_question(question, context)
+        answer = gemini_service.answer_question(question, context_list)
 
         return {
             "answer": answer,
