@@ -3,6 +3,7 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 import logging
 from backend.app.core.config import settings
+from backend.app.services.currency_converter import currency_converter
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,7 @@ class AlphaVantageService:
             raise
 
     def get_quote(self, symbol: str) -> Optional[Dict[str, Any]]:
-        """Get current quote for a stock symbol."""
+        """Get current quote for a stock symbol (prices converted to EUR)."""
         params = {
             "function": "GLOBAL_QUOTE",
             "symbol": symbol
@@ -47,7 +48,8 @@ class AlphaVantageService:
         if not quote:
             return None
 
-        return {
+        # Prices are in USD, convert to EUR
+        quote_data = {
             "symbol": quote.get("01. symbol"),
             "price": float(quote.get("05. price", 0)),
             "change": float(quote.get("09. change", 0)),
@@ -56,9 +58,12 @@ class AlphaVantageService:
             "latest_trading_day": quote.get("07. latest trading day")
         }
 
+        # Convert USD prices to EUR
+        return currency_converter.convert_price_dict(quote_data)
+
     def get_daily_prices(self, symbol: str, outputsize: str = "compact") -> List[Dict[str, Any]]:
         """
-        Get daily price data for a stock.
+        Get daily price data for a stock (prices converted to EUR).
 
         Args:
             symbol: Stock ticker symbol
@@ -85,15 +90,21 @@ class AlphaVantageService:
 
         prices = []
         for date_str, values in time_series.items():
-            prices.append({
+            # Prices are in USD, convert to EUR
+            price_data = {
                 "date": datetime.strptime(date_str, "%Y-%m-%d").date(),
                 "open": float(values["1. open"]),
                 "high": float(values["2. high"]),
                 "low": float(values["3. low"]),
                 "close": float(values["4. close"]),
                 "volume": int(values["5. volume"])
-            })
+            }
 
+            # Convert USD prices to EUR
+            price_data = currency_converter.convert_price_dict(price_data)
+            prices.append(price_data)
+
+        logger.info(f"Alpha Vantage: Retrieved {len(prices)} price records for {symbol} (converted to EUR)")
         return sorted(prices, key=lambda x: x["date"], reverse=True)
 
     def get_company_overview(self, symbol: str) -> Optional[Dict[str, Any]]:
