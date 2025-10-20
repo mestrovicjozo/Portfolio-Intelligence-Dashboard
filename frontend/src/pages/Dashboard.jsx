@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tantml:react-query';
 import { Link } from 'react-router-dom';
 import { Plus, TrendingUp, TrendingDown, X, MoreVertical, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -7,6 +7,7 @@ import { positionsApi, portfoliosApi, stocksApi } from '../services/api';
 import StockActionsModal from '../components/StockActionsModal';
 import AnimatedContainer from '../components/AnimatedContainer';
 import * as animations from '../utils/animations';
+import { formatEUR } from '../utils/currency';
 import './Dashboard.css';
 
 function Dashboard() {
@@ -160,14 +161,14 @@ function Dashboard() {
           >
             <AnimatedContainer animation="fadeInUp" delay={0.1} className="card">
               <h3>Total Value</h3>
-              <p className="metric">${activePortfolio.total_value.toLocaleString()}</p>
-              <p className="text-secondary">Cost: ${activePortfolio.total_cost.toLocaleString()}</p>
+              <p className="metric">{formatEUR(activePortfolio.total_value)}</p>
+              <p className="text-secondary">Cost: {formatEUR(activePortfolio.total_cost)}</p>
             </AnimatedContainer>
             <AnimatedContainer animation="fadeInUp" delay={0.2} className="card">
               <h3>Total Gain/Loss</h3>
               <p className={`metric ${activePortfolio.total_gain_loss >= 0 ? 'text-success' : 'text-danger'}`}>
                 {activePortfolio.total_gain_loss >= 0 ? '+' : ''}
-                ${Math.abs(activePortfolio.total_gain_loss).toLocaleString()}
+                {formatEUR(Math.abs(activePortfolio.total_gain_loss))}
               </p>
               <p className={activePortfolio.total_gain_loss_percent >= 0 ? 'text-success' : 'text-danger'}>
                 {activePortfolio.total_gain_loss_percent >= 0 ? '+' : ''}
@@ -195,12 +196,12 @@ function Dashboard() {
                       <h4>{position.stock.symbol}</h4>
                       <TrendingUp size={20} />
                     </div>
-                    <p className="mover-price">${position.current_price?.toFixed(2)}</p>
+                    <p className="mover-price">{formatEUR(position.current_price)}</p>
                     <p className="text-success">
                       +{position.gain_loss_percent.toFixed(2)}%
                     </p>
                     <p className="mover-shares">
-                      {position.shares} shares • +${position.gain_loss.toFixed(2)}
+                      {position.shares} shares @ {formatEUR(position.current_price)} • +{formatEUR(position.gain_loss)}
                     </p>
                   </div>
                 ))}
@@ -218,12 +219,12 @@ function Dashboard() {
                       <h4>{position.stock.symbol}</h4>
                       <TrendingDown size={20} />
                     </div>
-                    <p className="mover-price">${position.current_price?.toFixed(2)}</p>
+                    <p className="mover-price">{formatEUR(position.current_price)}</p>
                     <p className="text-danger">
                       {position.gain_loss_percent.toFixed(2)}%
                     </p>
                     <p className="mover-shares">
-                      {position.shares} shares • ${position.gain_loss.toFixed(2)}
+                      {position.shares} shares @ {formatEUR(position.current_price)} • {formatEUR(Math.abs(position.gain_loss))}
                     </p>
                   </div>
                 ))}
@@ -257,10 +258,10 @@ function Dashboard() {
                       </div>
                       <div className="position-compact-right">
                         <div className="position-compact-value">
-                          <p className="position-compact-price">${position.current_value?.toFixed(2) || 'N/A'}</p>
+                          <p className="position-compact-price">{position.current_value ? formatEUR(position.current_value) : 'N/A'}</p>
                           {position.gain_loss !== null && (
                             <p className={`position-compact-change ${gainLossClass}`}>
-                              {position.gain_loss >= 0 ? '+' : ''}${Math.abs(position.gain_loss).toFixed(2)}
+                              {position.gain_loss >= 0 ? '+' : ''}{formatEUR(Math.abs(position.gain_loss))}
                               <span className="change-percent"> ({position.gain_loss_percent?.toFixed(2)}%)</span>
                             </p>
                           )}
@@ -280,27 +281,27 @@ function Dashboard() {
                           </div>
                           <div className="detail-item">
                             <span className="detail-label">Avg Cost</span>
-                            <span className="detail-value">${position.average_cost.toFixed(2)}</span>
+                            <span className="detail-value">{formatEUR(position.average_cost)}</span>
                           </div>
                           <div className="detail-item">
                             <span className="detail-label">Current Price</span>
-                            <span className="detail-value">${position.current_price?.toFixed(2) || 'N/A'}</span>
+                            <span className="detail-value">{position.current_price ? formatEUR(position.current_price) : 'N/A'}</span>
                           </div>
                           <div className="detail-item">
                             <span className="detail-label">Total Cost</span>
-                            <span className="detail-value">${position.total_cost.toFixed(2)}</span>
+                            <span className="detail-value">{formatEUR(position.total_cost)}</span>
                           </div>
                           {position.current_value && (
                             <div className="detail-item">
                               <span className="detail-label">Total Value</span>
-                              <span className="detail-value">${position.current_value.toFixed(2)}</span>
+                              <span className="detail-value">{formatEUR(position.current_value)}</span>
                             </div>
                           )}
                           {position.day_change && (
                             <div className="detail-item">
                               <span className="detail-label">Day Change</span>
                               <span className={position.day_change >= 0 ? 'text-success' : 'text-danger'}>
-                                {position.day_change >= 0 ? '+' : ''}${Math.abs(position.day_change).toFixed(2)} ({position.day_change_percent?.toFixed(2)}%)
+                                {position.day_change >= 0 ? '+' : ''}{formatEUR(Math.abs(position.day_change))} ({position.day_change_percent?.toFixed(2)}%)
                               </span>
                             </div>
                           )}

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { portfoliosApi } from '../services/api';
 import { ChevronDown, Plus, Check, Trash2, Edit2 } from 'lucide-react';
+import { formatEUR } from '../utils/currency';
 import './PortfolioSelector.css';
 
 const PortfolioSelector = () => {
@@ -123,7 +124,7 @@ const PortfolioSelector = () => {
           <span className="portfolio-name">{activePortfolio?.name || 'Select Portfolio'}</span>
           {activePortfolio && (
             <span className="portfolio-stats">
-              {activePortfolio.position_count} positions • ${activePortfolio.total_value.toLocaleString()}
+              {activePortfolio.position_count} positions • {formatEUR(activePortfolio.total_value)}
             </span>
           )}
         </div>
@@ -198,9 +199,8 @@ const PortfolioSelector = () => {
       )}
 
       {showCreateModal && (
-        <>
-          <div className="modal-overlay" onClick={() => setShowCreateModal(false)} />
-          <div className="modal">
+        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Create New Portfolio</h2>
               <button className="modal-close" onClick={() => setShowCreateModal(false)}>
@@ -244,13 +244,12 @@ const PortfolioSelector = () => {
               </div>
             </form>
           </div>
-        </>
+        </div>
       )}
 
       {showEditModal && (
-        <>
-          <div className="modal-overlay" onClick={() => setShowEditModal(false)} />
-          <div className="modal">
+        <div className="modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Rename Portfolio</h2>
               <button className="modal-close" onClick={() => setShowEditModal(false)}>
@@ -294,7 +293,7 @@ const PortfolioSelector = () => {
               </div>
             </form>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
