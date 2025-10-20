@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 import pytz
 
 from backend.app.db.base import get_db
-from backend.app.models import Stock, StockPrice, NewsArticle
+from backend.app.models import Stock, StockPrice, NewsArticle, Position, Portfolio
 from backend.app.services.scheduler import scheduler_service
 from backend.app.core.config import settings
 
@@ -154,3 +154,74 @@ def trigger_job_manually(job_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error triggering job: {str(e)}")
+
+
+@router.post("/reset-data")
+def reset_data(
+    keep_stocks: bool = True,
+    keep_portfolios: bool = False,
+    db: Session = Depends(get_db)
+):
+    """
+    Reset/delete collected data from the database.
+
+    This endpoint is useful for fresh imports from Trading212 or cleaning test data.
+
+    Args:
+        keep_stocks: If True, keeps stock symbols but deletes prices and articles (default: True)
+        keep_portfolios: If True, keeps portfolio structures but deletes positions (default: False)
+
+    Returns:
+        Summary of deleted records
+    """
+    try:
+        deleted_counts = {
+            "positions": 0,
+            "stock_prices": 0,
+            "news_articles": 0,
+            "stocks": 0,
+            "portfolios": 0
+        }
+
+        # Delete positions (this will cascade to delete position-related data)
+        positions_deleted = db.query(Position).delete()
+        deleted_counts["positions"] = positions_deleted
+
+        # Delete stock prices
+        prices_deleted = db.query(StockPrice).delete()
+        deleted_counts["stock_prices"] = prices_deleted
+
+        # Delete news articles
+        articles_deleted = db.query(NewsArticle).delete()
+        deleted_counts["news_articles"] = articles_deleted
+
+        # Optionally delete stocks
+        if not keep_stocks:
+            stocks_deleted = db.query(Stock).delete()
+            deleted_counts["stocks"] = stocks_deleted
+
+        # Optionally delete portfolios
+        if not keep_portfolios:
+            portfolios_deleted = db.query(Portfolio).delete()
+            deleted_counts["portfolios"] = portfolios_deleted
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": "Data reset completed successfully",
+            "deleted_counts": deleted_counts,
+            "settings": {
+                "kept_stocks": keep_stocks,
+                "kept_portfolios": keep_portfolios
+            },
+            "next_steps": [
+                "Import fresh data from Trading212 CSV",
+                "Trigger price collection: POST /admin/scheduler/trigger/daily_price_collection",
+                "Trigger news collection: POST /admin/scheduler/trigger/daily_news_collection"
+            ]
+        }
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error resetting data: {str(e)}")
