@@ -11,13 +11,7 @@ const api = axios.create({
 
 // Portfolios API
 export const portfoliosApi = {
-  getAll: () => api.get('/portfolios'),
-  getActive: () => api.get('/portfolios/active'),
-  getOne: (portfolioId) => api.get(`/portfolios/${portfolioId}`),
-  create: (portfolioData) => api.post('/portfolios', portfolioData),
-  update: (portfolioId, portfolioData) => api.put(`/portfolios/${portfolioId}`, portfolioData),
-  activate: (portfolioId) => api.post(`/portfolios/${portfolioId}/activate`),
-  delete: (portfolioId) => api.delete(`/portfolios/${portfolioId}`),
+  getDefault: () => api.get('/portfolios/default'),
 };
 
 // Positions API

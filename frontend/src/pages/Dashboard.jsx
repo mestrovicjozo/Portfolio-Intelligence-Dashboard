@@ -22,11 +22,11 @@ function Dashboard() {
   const fileInputRef = useRef(null);
   const queryClient = useQueryClient();
 
-  // Fetch active portfolio
-  const { data: activePortfolio } = useQuery({
-    queryKey: ['active-portfolio'],
+  // Fetch default portfolio
+  const { data: portfolio } = useQuery({
+    queryKey: ['portfolio'],
     queryFn: async () => {
-      const response = await portfoliosApi.getActive();
+      const response = await portfoliosApi.getDefault();
       return response.data;
     },
   });
@@ -45,7 +45,7 @@ function Dashboard() {
     mutationFn: (positionData) => positionsApi.create(positionData),
     onSuccess: () => {
       queryClient.invalidateQueries(['positions']);
-      queryClient.invalidateQueries(['active-portfolio']);
+      queryClient.invalidateQueries(['portfolio']);
       setNewSymbol('');
       setNewShares('');
       setNewCost('');
@@ -58,7 +58,7 @@ function Dashboard() {
     mutationFn: (positionId) => positionsApi.delete(positionId),
     onSuccess: () => {
       queryClient.invalidateQueries(['positions']);
-      queryClient.invalidateQueries(['active-portfolio']);
+      queryClient.invalidateQueries(['portfolio']);
     },
   });
 
@@ -67,7 +67,7 @@ function Dashboard() {
     mutationFn: (file) => positionsApi.importCSV(file),
     onSuccess: (response) => {
       queryClient.invalidateQueries(['positions']);
-      queryClient.invalidateQueries(['active-portfolio']);
+      queryClient.invalidateQueries(['portfolio']);
       setCsvFile(null);
       setShowImportCSV(false);
       if (fileInputRef.current) {
@@ -135,10 +135,8 @@ function Dashboard() {
       <div className="container">
         <div className="dashboard-header">
           <div>
-            <h1>{activePortfolio?.name || 'Portfolio Dashboard'}</h1>
-            {activePortfolio?.description && (
-              <p className="portfolio-description">{activePortfolio.description}</p>
-            )}
+            <h1>My Portfolio</h1>
+            <p className="portfolio-description">Your investment portfolio dashboard</p>
           </div>
           <div className="dashboard-actions">
             <button className="btn btn-secondary" onClick={() => setShowImportCSV(true)}>
@@ -152,7 +150,7 @@ function Dashboard() {
           </div>
         </div>
 
-        {activePortfolio && (
+        {portfolio && (
           <motion.div
             className="summary-cards"
             variants={animations.staggerContainer}
@@ -161,23 +159,23 @@ function Dashboard() {
           >
             <AnimatedContainer animation="fadeInUp" delay={0.1} className="card">
               <h3>Total Value</h3>
-              <p className="metric">{formatEUR(activePortfolio.total_value)}</p>
-              <p className="text-secondary">Cost: {formatEUR(activePortfolio.total_cost)}</p>
+              <p className="metric">{formatEUR(portfolio.total_value)}</p>
+              <p className="text-secondary">Cost: {formatEUR(portfolio.total_cost)}</p>
             </AnimatedContainer>
             <AnimatedContainer animation="fadeInUp" delay={0.2} className="card">
               <h3>Total Gain/Loss</h3>
-              <p className={`metric ${activePortfolio.total_gain_loss >= 0 ? 'text-success' : 'text-danger'}`}>
-                {activePortfolio.total_gain_loss >= 0 ? '+' : ''}
-                {formatEUR(Math.abs(activePortfolio.total_gain_loss))}
+              <p className={`metric ${portfolio.total_gain_loss >= 0 ? 'text-success' : 'text-danger'}`}>
+                {portfolio.total_gain_loss >= 0 ? '+' : ''}
+                {formatEUR(Math.abs(portfolio.total_gain_loss))}
               </p>
-              <p className={activePortfolio.total_gain_loss_percent >= 0 ? 'text-success' : 'text-danger'}>
-                {activePortfolio.total_gain_loss_percent >= 0 ? '+' : ''}
-                {activePortfolio.total_gain_loss_percent}%
+              <p className={portfolio.total_gain_loss_percent >= 0 ? 'text-success' : 'text-danger'}>
+                {portfolio.total_gain_loss_percent >= 0 ? '+' : ''}
+                {portfolio.total_gain_loss_percent}%
               </p>
             </AnimatedContainer>
             <AnimatedContainer animation="fadeInUp" delay={0.3} className="card">
               <h3>Positions</h3>
-              <p className="metric">{activePortfolio.position_count}</p>
+              <p className="metric">{portfolio.position_count}</p>
               <p className="text-secondary">
                 {totalGainers} gainers • {totalLosers} losers
               </p>

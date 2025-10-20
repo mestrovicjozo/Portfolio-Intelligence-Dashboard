@@ -1,6 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Newspaper, MessageSquare, TrendingUp } from 'lucide-react';
-import PortfolioSelector from './PortfolioSelector';
 import './Navigation.css';
 
 function Navigation() {
@@ -36,9 +35,6 @@ function Navigation() {
             );
           })}
         </ul>
-        <div className="nav-portfolio">
-          <PortfolioSelector />
-        </div>
       </div>
     </nav>
   );
