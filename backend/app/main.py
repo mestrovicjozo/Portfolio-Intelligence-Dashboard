@@ -3,8 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 
 from backend.app.core.config import settings
-from backend.app.api.routes import stocks, news, query, portfolios, positions, stock_actions
+from backend.app.api.routes import stocks, news, query, portfolios, positions, stock_actions, admin
 from backend.app.db.base import engine, Base
+from backend.app.services.scheduler import scheduler_service
 
 # Configure logging
 logging.basicConfig(
@@ -39,11 +40,12 @@ app.include_router(stocks.router, prefix="/api/stocks", tags=["stocks"])
 app.include_router(stock_actions.router, prefix="/api/stocks", tags=["stock-actions"])
 app.include_router(news.router, prefix="/api/news", tags=["news"])
 app.include_router(query.router, prefix="/api/query", tags=["query"])
+app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize database tables on startup."""
+    """Initialize database tables and start scheduler on startup."""
     logger.info("Starting up Portfolio Intelligence Dashboard API")
 
     # Create all tables
@@ -53,11 +55,25 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Error creating database tables: {e}")
 
+    # Start scheduler
+    try:
+        scheduler_service.start()
+        logger.info("Scheduler started successfully")
+    except Exception as e:
+        logger.error(f"Error starting scheduler: {e}")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown."""
     logger.info("Shutting down Portfolio Intelligence Dashboard API")
+
+    # Shutdown scheduler
+    try:
+        scheduler_service.shutdown()
+        logger.info("Scheduler shutdown successfully")
+    except Exception as e:
+        logger.error(f"Error shutting down scheduler: {e}")
 
 
 @app.get("/")

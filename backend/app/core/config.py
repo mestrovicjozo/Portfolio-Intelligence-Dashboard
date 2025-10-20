@@ -30,6 +30,20 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = "gemini-1.5-flash"
     EMBEDDING_DIMENSION: int = 768
 
+    # Scheduler settings
+    SCHEDULER_TIMEZONE: str = "America/New_York"
+    PRICE_COLLECTION_TIME: str = "17:00"  # 5:00 PM ET (after market close)
+    NEWS_COLLECTION_TIME: str = "19:00"  # 7:00 PM ET
+    WEEKLY_EXPORT_DAY: str = "sunday"  # Day of week for exports
+    WEEKLY_EXPORT_TIME: str = "02:00"  # 2:00 AM on export day
+    MONTHLY_BACKUP_DAY: int = 1  # Day of month (1-31)
+    MONTHLY_BACKUP_TIME: str = "03:00"  # 3:00 AM on backup day
+
+    # Data export settings
+    EXPORT_DIR: str = str(Path(__file__).parent.parent.parent.parent / "exports")
+    BACKUP_DIR: str = str(Path(__file__).parent.parent.parent.parent / "backups")
+    EXPORT_RETENTION_DAYS: int = 180  # Keep exports for 6 months
+
     class Config:
         env_file = ".env"
         case_sensitive = True
