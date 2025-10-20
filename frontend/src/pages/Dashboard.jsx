@@ -2,8 +2,11 @@ import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Plus, TrendingUp, TrendingDown, X, MoreVertical, Upload } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { positionsApi, portfoliosApi, stocksApi } from '../services/api';
 import StockActionsModal from '../components/StockActionsModal';
+import AnimatedContainer from '../components/AnimatedContainer';
+import * as animations from '../utils/animations';
 import './Dashboard.css';
 
 function Dashboard() {
@@ -149,13 +152,18 @@ function Dashboard() {
         </div>
 
         {activePortfolio && (
-          <div className="summary-cards">
-            <div className="card">
+          <motion.div
+            className="summary-cards"
+            variants={animations.staggerContainer}
+            initial="initial"
+            animate="animate"
+          >
+            <AnimatedContainer animation="fadeInUp" delay={0.1} className="card">
               <h3>Total Value</h3>
               <p className="metric">${activePortfolio.total_value.toLocaleString()}</p>
               <p className="text-secondary">Cost: ${activePortfolio.total_cost.toLocaleString()}</p>
-            </div>
-            <div className="card">
+            </AnimatedContainer>
+            <AnimatedContainer animation="fadeInUp" delay={0.2} className="card">
               <h3>Total Gain/Loss</h3>
               <p className={`metric ${activePortfolio.total_gain_loss >= 0 ? 'text-success' : 'text-danger'}`}>
                 {activePortfolio.total_gain_loss >= 0 ? '+' : ''}
@@ -165,15 +173,15 @@ function Dashboard() {
                 {activePortfolio.total_gain_loss_percent >= 0 ? '+' : ''}
                 {activePortfolio.total_gain_loss_percent}%
               </p>
-            </div>
-            <div className="card">
+            </AnimatedContainer>
+            <AnimatedContainer animation="fadeInUp" delay={0.3} className="card">
               <h3>Positions</h3>
               <p className="metric">{activePortfolio.position_count}</p>
               <p className="text-secondary">
                 {totalGainers} gainers • {totalLosers} losers
               </p>
-            </div>
-          </div>
+            </AnimatedContainer>
+          </motion.div>
         )}
 
         <div className="movers-sections">
@@ -351,131 +359,151 @@ function Dashboard() {
           </p>
         </div>
 
-        {showAddPosition && (
-          <div className="modal-overlay" onClick={() => setShowAddPosition(false)}>
-            <div className="modal" onClick={(e) => e.stopPropagation()}>
-              <h2>Add Position to Portfolio</h2>
-              <form onSubmit={handleAddPosition}>
-                <div className="form-group">
-                  <label htmlFor="symbol">Stock Symbol</label>
-                  <input
-                    id="symbol"
-                    type="text"
-                    className="input"
-                    placeholder="e.g., AAPL"
-                    value={newSymbol}
-                    onChange={(e) => setNewSymbol(e.target.value)}
-                    autoFocus
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="shares">Number of Shares</label>
-                  <input
-                    id="shares"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    className="input"
-                    placeholder="e.g., 10"
-                    value={newShares}
-                    onChange={(e) => setNewShares(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label htmlFor="cost">Average Cost Per Share</label>
-                  <input
-                    id="cost"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    className="input"
-                    placeholder="e.g., 150.00"
-                    value={newCost}
-                    onChange={(e) => setNewCost(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="modal-actions">
-                  <button type="button" className="btn btn-secondary" onClick={() => setShowAddPosition(false)}>
-                    Cancel
-                  </button>
-                  <button type="submit" className="btn btn-primary" disabled={addPositionMutation.isLoading}>
-                    {addPositionMutation.isLoading ? 'Adding...' : 'Add Position'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {showImportCSV && (
-          <div className="modal-overlay" onClick={() => setShowImportCSV(false)}>
-            <div className="modal" onClick={(e) => e.stopPropagation()}>
-              <h2>Import Portfolio from CSV</h2>
-              <p className="text-secondary" style={{ marginBottom: '1rem' }}>
-                Upload a CSV file exported from Trading 212 to import all your positions at once.
-              </p>
-              <div className="alert alert-info" style={{
-                padding: '0.75rem 1rem',
-                marginBottom: '1.5rem',
-                backgroundColor: '#eff6ff',
-                border: '1px solid #bfdbfe',
-                borderRadius: '6px',
-                fontSize: '0.875rem',
-                color: '#1e40af'
-              }}>
-                <strong>Note:</strong> Currently, we only support CSV files exported from Trading 212.
-                The format must include columns: Slice (symbol), Name, Invested value, and Owned quantity.
-              </div>
-              <form onSubmit={handleImportCSV}>
-                <div className="form-group">
-                  <label htmlFor="csv-file">Select CSV File</label>
-                  <input
-                    id="csv-file"
-                    type="file"
-                    accept=".csv"
-                    onChange={handleFileSelect}
-                    ref={fileInputRef}
-                    className="input"
-                    required
-                  />
-                  {csvFile && (
-                    <p className="file-name" style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#10b981' }}>
-                      Selected: {csvFile.name}
-                    </p>
-                  )}
-                </div>
-                <div className="modal-actions">
-                  <button type="button" className="btn btn-secondary" onClick={() => setShowImportCSV(false)}>
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="btn btn-primary"
-                    disabled={!csvFile || importCSVMutation.isLoading}
-                  >
-                    {importCSVMutation.isLoading ? 'Importing...' : 'Import Positions'}
-                  </button>
-                </div>
-              </form>
-              {importCSVMutation.isLoading && (
-                <div className="import-progress">
-                  <div className="progress-header">
-                    <p>Importing positions...</p>
-                    <p className="progress-subtext">Fetching stock data and price history. This may take a moment.</p>
+        <AnimatePresence>
+          {showAddPosition && (
+            <motion.div
+              className="modal-overlay"
+              onClick={() => setShowAddPosition(false)}
+              {...animations.modalOverlay}
+            >
+              <motion.div
+                className="modal"
+                onClick={(e) => e.stopPropagation()}
+                {...animations.modalContent}
+              >
+                <h2>Add Position to Portfolio</h2>
+                <form onSubmit={handleAddPosition}>
+                  <div className="form-group">
+                    <label htmlFor="symbol">Stock Symbol</label>
+                    <input
+                      id="symbol"
+                      type="text"
+                      className="input"
+                      placeholder="e.g., AAPL"
+                      value={newSymbol}
+                      onChange={(e) => setNewSymbol(e.target.value)}
+                      autoFocus
+                      required
+                    />
                   </div>
-                  <div className="progress-bar-container">
-                    <div className="progress-bar">
-                      <div className="progress-bar-fill"></div>
+                  <div className="form-group">
+                    <label htmlFor="shares">Number of Shares</label>
+                    <input
+                      id="shares"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="input"
+                      placeholder="e.g., 10"
+                      value={newShares}
+                      onChange={(e) => setNewShares(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="cost">Average Cost Per Share</label>
+                    <input
+                      id="cost"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="input"
+                      placeholder="e.g., 150.00"
+                      value={newCost}
+                      onChange={(e) => setNewCost(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="modal-actions">
+                    <button type="button" className="btn btn-secondary" onClick={() => setShowAddPosition(false)}>
+                      Cancel
+                    </button>
+                    <button type="submit" className="btn btn-primary" disabled={addPositionMutation.isLoading}>
+                      {addPositionMutation.isLoading ? 'Adding...' : 'Add Position'}
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showImportCSV && (
+            <motion.div
+              className="modal-overlay"
+              onClick={() => setShowImportCSV(false)}
+              {...animations.modalOverlay}
+            >
+              <motion.div
+                className="modal"
+                onClick={(e) => e.stopPropagation()}
+                {...animations.modalContent}
+              >
+                <h2>Import Portfolio from CSV</h2>
+                <p className="text-secondary" style={{ marginBottom: '1rem' }}>
+                  Upload a CSV file exported from Trading 212 to import all your positions at once.
+                </p>
+                <div className="alert alert-info" style={{
+                  padding: '0.75rem 1rem',
+                  marginBottom: '1.5rem',
+                  backgroundColor: '#eff6ff',
+                  border: '1px solid #bfdbfe',
+                  borderRadius: '6px',
+                  fontSize: '0.875rem',
+                  color: '#1e40af'
+                }}>
+                  <strong>Note:</strong> Currently, we only support CSV files exported from Trading 212.
+                  The format must include columns: Slice (symbol), Name, Invested value, and Owned quantity.
+                </div>
+                <form onSubmit={handleImportCSV}>
+                  <div className="form-group">
+                    <label htmlFor="csv-file">Select CSV File</label>
+                    <input
+                      id="csv-file"
+                      type="file"
+                      accept=".csv"
+                      onChange={handleFileSelect}
+                      ref={fileInputRef}
+                      className="input"
+                      required
+                    />
+                    {csvFile && (
+                      <p className="file-name" style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#10b981' }}>
+                        Selected: {csvFile.name}
+                      </p>
+                    )}
+                  </div>
+                  <div className="modal-actions">
+                    <button type="button" className="btn btn-secondary" onClick={() => setShowImportCSV(false)}>
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="btn btn-primary"
+                      disabled={!csvFile || importCSVMutation.isLoading}
+                    >
+                      {importCSVMutation.isLoading ? 'Importing...' : 'Import Positions'}
+                    </button>
+                  </div>
+                </form>
+                {importCSVMutation.isLoading && (
+                  <div className="import-progress">
+                    <div className="progress-header">
+                      <p>Importing positions...</p>
+                      <p className="progress-subtext">Fetching stock data and price history. This may take a moment.</p>
+                    </div>
+                    <div className="progress-bar-container">
+                      <div className="progress-bar">
+                        <div className="progress-bar-fill"></div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+                )}
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {selectedStock && (
           <StockActionsModal
