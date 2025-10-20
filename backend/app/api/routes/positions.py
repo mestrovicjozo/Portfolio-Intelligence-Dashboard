@@ -1,9 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Dict
 import logging
 import csv
 import io
+import uuid
+import asyncio
 
 from backend.app.db.base import get_db
 from backend.app.models import Portfolio, Position, Stock, StockPrice, NewsArticle, ArticleStock
@@ -19,6 +21,7 @@ from backend.app.services.alpha_vantage import AlphaVantageService
 from backend.app.services.yahoo_finance import YahooFinanceService
 from backend.app.services.gemini_service import GeminiService
 from backend.app.services.vector_store import VectorStoreService
+from backend.app.services.background_jobs import background_job_service, JobStatus
 from backend.app.core.config import settings
 from datetime import datetime, timedelta
 
@@ -38,6 +41,154 @@ TRADING212_SYMBOL_MAP = {
     "PTX": "PLTR",    # Palantir
     # Add more mappings as needed
 }
+
+
+async def fetch_prices_and_news_background(stock_id: int, stock_symbol: str, job_id: str):
+    """
+    Background task to fetch price data and news for a newly added stock.
+
+    Args:
+        stock_id: Stock database ID
+        stock_symbol: Stock ticker symbol
+        job_id: Background job tracking ID
+    """
+    logger.info(f"[{job_id}] Starting background fetch for {stock_symbol}")
+
+    # Update job status to running
+    await background_job_service.update_job_status(job_id, JobStatus.RUNNING)
+
+    from backend.app.db.base import engine
+    from sqlalchemy.orm import sessionmaker
+
+    Session = sessionmaker(bind=engine)
+    db = Session()
+
+    try:
+        # Fetch price data
+        prices_count = 0
+        try:
+            logger.info(f"[{job_id}] Fetching price data for {stock_symbol}")
+
+            # Try Yahoo Finance first
+            prices = yahoo_finance.get_daily_prices(stock_symbol, days=100)
+
+            if not prices:
+                # Fallback to Alpha Vantage
+                logger.info(f"[{job_id}] Yahoo Finance failed, trying Alpha Vantage")
+                prices = alpha_vantage.get_daily_prices(stock_symbol, outputsize="compact")
+
+            if prices:
+                for price_data in prices:
+                    # Check if price already exists
+                    existing = db.query(StockPrice).filter(
+                        StockPrice.stock_id == stock_id,
+                        StockPrice.date == price_data["date"]
+                    ).first()
+
+                    if not existing:
+                        db_price = StockPrice(
+                            stock_id=stock_id,
+                            date=price_data["date"],
+                            open=price_data["open"],
+                            close=price_data["close"],
+                            high=price_data["high"],
+                            low=price_data["low"],
+                            volume=price_data["volume"]
+                        )
+                        db.add(db_price)
+                        prices_count += 1
+
+                db.commit()
+                logger.info(f"[{job_id}] Added {prices_count} price records for {stock_symbol}")
+        except Exception as e:
+            logger.error(f"[{job_id}] Error fetching prices for {stock_symbol}: {e}")
+
+        # Fetch news articles
+        news_count = 0
+        try:
+            logger.info(f"[{job_id}] Fetching news for {stock_symbol}")
+            one_week_ago = datetime.now() - timedelta(days=7)
+            time_from = one_week_ago.strftime("%Y%m%dT%H%M")
+
+            news_items = alpha_vantage.get_news_sentiment(
+                tickers=stock_symbol,
+                time_from=time_from,
+                limit=50
+            )
+
+            for item in news_items:
+                # Check if article already exists
+                existing = db.query(NewsArticle).filter(
+                    NewsArticle.url == item["url"]
+                ).first()
+
+                if not existing and stock_symbol in item.get("ticker_sentiment", {}):
+                    article = NewsArticle(
+                        title=item["title"],
+                        source=item["source"],
+                        url=item["url"],
+                        published_at=item["published_at"],
+                        summary=item["summary"],
+                        sentiment_score=item["overall_sentiment_score"]
+                    )
+                    db.add(article)
+                    db.flush()
+
+                    # Link to stock
+                    article_stock = ArticleStock(
+                        article_id=article.id,
+                        stock_id=stock_id
+                    )
+                    db.add(article_stock)
+
+                    # Generate embedding
+                    try:
+                        content = f"{item['title']}. {item['summary']}"
+                        embedding = gemini_service.generate_embedding(content)
+                        vector_store.add_article(
+                            article_id=article.id,
+                            content=content,
+                            embedding=embedding,
+                            metadata={
+                                "title": item["title"],
+                                "source": item["source"],
+                                "published_at": str(item["published_at"]),
+                                "sentiment_score": item["overall_sentiment_score"],
+                                "stocks": [stock_symbol]
+                            }
+                        )
+                    except Exception as e:
+                        logger.warning(f"[{job_id}] Could not add article to vector store: {e}")
+
+                    news_count += 1
+
+            db.commit()
+            logger.info(f"[{job_id}] Added {news_count} news articles for {stock_symbol}")
+        except Exception as e:
+            logger.error(f"[{job_id}] Error fetching news for {stock_symbol}: {e}")
+
+        # Mark job as completed
+        await background_job_service.update_job_status(
+            job_id,
+            JobStatus.COMPLETED,
+            result={
+                "stock_symbol": stock_symbol,
+                "prices_added": prices_count,
+                "news_added": news_count
+            }
+        )
+
+        logger.info(f"[{job_id}] Background fetch completed for {stock_symbol}")
+
+    except Exception as e:
+        logger.error(f"[{job_id}] Fatal error in background fetch: {e}")
+        await background_job_service.update_job_status(
+            job_id,
+            JobStatus.FAILED,
+            error=str(e)
+        )
+    finally:
+        db.close()
 
 
 @router.get("/", response_model=List[PositionWithDetails])
@@ -82,9 +233,13 @@ def get_position(position_id: int, db: Session = Depends(get_db)):
     return get_position_details(db, position)
 
 
-@router.post("/", response_model=PositionWithDetails, status_code=status.HTTP_201_CREATED)
-def create_position(position_data: PositionCreate, db: Session = Depends(get_db)):
-    """Create a new position in the active portfolio."""
+@router.post("/", response_model=Dict, status_code=status.HTTP_201_CREATED)
+async def create_position(
+    position_data: PositionCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """Create a new position in the active portfolio with background price/news fetching."""
     # Get active portfolio
     portfolio = db.query(Portfolio).filter(Portfolio.is_active == True).first()
 
@@ -143,99 +298,36 @@ def create_position(position_data: PositionCreate, db: Session = Depends(get_db)
 
         logger.info(f"Created position: {stock.symbol} - {position_data.shares} shares @ ${position_data.average_cost}")
 
-        # If this is a new stock, fetch initial price data and news articles
+        # If this is a new stock, fetch price data and news in the background
+        job_id = None
         if is_new_stock:
-            try:
-                logger.info(f"Fetching initial price data for new stock: {stock.symbol}")
-                prices = alpha_vantage.get_daily_prices(stock.symbol, outputsize="compact")
+            job_id = str(uuid.uuid4())
 
-                # Add price data to database
-                for price_data in prices:
-                    db_price = StockPrice(
-                        stock_id=stock.id,
-                        date=price_data["date"],
-                        open=price_data["open"],
-                        close=price_data["close"],
-                        high=price_data["high"],
-                        low=price_data["low"],
-                        volume=price_data["volume"]
-                    )
-                    db.add(db_price)
+            # Create background job
+            background_job_service.create_job(
+                job_id=job_id,
+                job_type="price_news_fetch",
+                stock_symbol=stock.symbol
+            )
 
-                db.commit()
-                logger.info(f"Successfully added {len(prices)} price records for {stock.symbol}")
-            except Exception as e:
-                # Don't fail the position creation if price fetch fails
-                logger.warning(f"Could not fetch price data for {stock.symbol}: {str(e)}")
+            # Schedule background task
+            background_tasks.add_task(
+                fetch_prices_and_news_background,
+                stock.id,
+                stock.symbol,
+                job_id
+            )
 
-            # Fetch news articles from the last week
-            try:
-                logger.info(f"Fetching news articles for new stock: {stock.symbol}")
-                # Calculate time_from as 1 week ago in YYYYMMDDTHHMM format
-                one_week_ago = datetime.now() - timedelta(days=7)
-                time_from = one_week_ago.strftime("%Y%m%dT%H%M")
+            logger.info(f"Scheduled background fetch for {stock.symbol} (job_id: {job_id})")
 
-                news_items = alpha_vantage.get_news_sentiment(
-                    tickers=stock.symbol,
-                    time_from=time_from,
-                    limit=50
-                )
+        # Return position details with job info
+        position_details = get_position_details(db, position)
 
-                news_count = 0
-                for item in news_items:
-                    # Check if article already exists
-                    existing = db.query(NewsArticle).filter(
-                        NewsArticle.url == item["url"]
-                    ).first()
-
-                    if not existing and stock.symbol in item.get("ticker_sentiment", {}):
-                        # Create new article
-                        article = NewsArticle(
-                            title=item["title"],
-                            source=item["source"],
-                            url=item["url"],
-                            published_at=item["published_at"],
-                            summary=item["summary"],
-                            sentiment_score=item["overall_sentiment_score"]
-                        )
-                        db.add(article)
-                        db.flush()  # Get article ID
-
-                        # Link to stock
-                        article_stock = ArticleStock(
-                            article_id=article.id,
-                            stock_id=stock.id
-                        )
-                        db.add(article_stock)
-
-                        # Generate embedding and add to vector store
-                        try:
-                            content = f"{item['title']}. {item['summary']}"
-                            embedding = gemini_service.generate_embedding(content)
-                            vector_store.add_article(
-                                article_id=article.id,
-                                content=content,
-                                embedding=embedding,
-                                metadata={
-                                    "title": item["title"],
-                                    "source": item["source"],
-                                    "published_at": str(item["published_at"]),
-                                    "sentiment_score": item["overall_sentiment_score"],
-                                    "stocks": [stock.symbol]
-                                }
-                            )
-                        except Exception as e:
-                            logger.warning(f"Could not add article to vector store: {str(e)}")
-
-                        news_count += 1
-
-                db.commit()
-                logger.info(f"Successfully added {news_count} news articles for {stock.symbol}")
-            except Exception as e:
-                # Don't fail the position creation if news fetch fails
-                logger.warning(f"Could not fetch news articles for {stock.symbol}: {str(e)}")
-
-        return get_position_details(db, position)
+        return {
+            "position": position_details.dict(),
+            "background_job_id": job_id,
+            "message": f"Position created. {'Fetching price data in background...' if job_id else 'Stock already exists.'}"
+        }
 
     except Exception as e:
         db.rollback()
