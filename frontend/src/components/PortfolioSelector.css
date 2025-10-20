@@ -53,6 +53,7 @@
   bottom: 0;
   background: rgba(0, 0, 0, 0.3);
   z-index: 998;
+  cursor: pointer;
 }
 
 .portfolio-selector .modal-overlay {
@@ -68,6 +69,7 @@
   align-items: center !important;
   justify-content: center !important;
   padding: 1rem;
+  cursor: pointer;
 }
 
 .portfolio-dropdown {
@@ -84,6 +86,8 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  cursor: default;
+  pointer-events: auto;
 }
 
 @media (max-width: 768px) {
@@ -122,6 +126,7 @@
   font-size: 14px;
   font-weight: 500;
   transition: background 0.2s;
+  pointer-events: auto;
 }
 
 .btn-create-portfolio:hover {
@@ -156,6 +161,7 @@
   padding: 0;
   text-align: left;
   cursor: pointer;
+  pointer-events: auto;
 }
 
 .portfolio-item-info {
@@ -196,6 +202,7 @@
   cursor: pointer;
   border-radius: 4px;
   transition: background 0.2s;
+  pointer-events: auto;
 }
 
 .btn-edit-portfolio {
@@ -230,6 +237,8 @@
   right: 0 !important;
   top: auto !important;
   transform: none !important;
+  cursor: default;
+  pointer-events: auto;
 }
 
 .portfolio-selector .modal-header {
@@ -262,6 +271,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 4px;
+  pointer-events: auto;
 }
 
 .modal-close:hover {
@@ -331,6 +341,7 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
+  pointer-events: auto;
 }
 
 .btn-primary {
