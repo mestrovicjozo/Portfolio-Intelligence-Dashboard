@@ -257,7 +257,7 @@ function Dashboard() {
                       </div>
                       <div className="position-compact-right">
                         <div className="position-compact-value">
-                          <p className="position-compact-price">${position.current_price?.toFixed(2) || 'N/A'}</p>
+                          <p className="position-compact-price">${position.current_value?.toFixed(2) || 'N/A'}</p>
                           {position.gain_loss !== null && (
                             <p className={`position-compact-change ${gainLossClass}`}>
                               {position.gain_loss >= 0 ? '+' : ''}${Math.abs(position.gain_loss).toFixed(2)}

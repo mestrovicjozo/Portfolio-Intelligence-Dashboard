@@ -332,6 +332,20 @@
   margin: 0;
   font-size: 1.5rem;
   color: var(--color-text);
+  background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.dashboard .modal > p,
+.dashboard .modal > .alert {
+  padding: 0 var(--spacing-xl);
+  margin-bottom: var(--spacing-md);
+}
+
+.dashboard .modal > .alert {
+  margin-left: var(--spacing-xl);
+  margin-right: var(--spacing-xl);
+  padding: 0.75rem 1rem;
 }
 
 .dashboard .modal form {

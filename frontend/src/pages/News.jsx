@@ -3,10 +3,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw, ExternalLink, Filter } from 'lucide-react';
 import { newsApi, positionsApi } from '../services/api';
 import { formatDistanceToNow } from 'date-fns';
+import { useToast } from '../components/Toast/ToastProvider';
 import './News.css';
 
 function News() {
   const queryClient = useQueryClient();
+  const toast = useToast();
   const [sortBy, setSortBy] = useState('latest'); // latest, oldest, highest-sentiment, lowest-sentiment
   const [filterStock, setFilterStock] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
@@ -30,8 +32,21 @@ function News() {
 
   const refreshMutation = useMutation({
     mutationFn: () => newsApi.refresh(),
-    onSuccess: () => {
+    onSuccess: (response) => {
       queryClient.invalidateQueries(['news']);
+      const { new_articles = 0, updated_articles = 0 } = response.data || {};
+      toast.success(
+        'News Refreshed',
+        `Found ${new_articles} new articles and updated ${updated_articles} existing articles`,
+        5000
+      );
+    },
+    onError: (error) => {
+      toast.error(
+        'Refresh Failed',
+        error.response?.data?.detail || 'Failed to refresh news. Please try again.',
+        6000
+      );
     },
   });
 
