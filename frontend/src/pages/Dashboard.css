@@ -313,6 +313,8 @@
   justify-content: center;
   z-index: 1000;
   padding: 1rem;
+  cursor: pointer;
+  pointer-events: auto;
 }
 
 .dashboard .modal {
@@ -324,6 +326,8 @@
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: var(--shadow-xl);
+  cursor: default;
+  pointer-events: auto;
 }
 
 .dashboard .modal h2 {
