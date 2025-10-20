@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tantml:react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Plus, TrendingUp, TrendingDown, X, MoreVertical, Upload } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
