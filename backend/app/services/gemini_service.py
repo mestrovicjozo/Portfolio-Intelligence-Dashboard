@@ -58,20 +58,38 @@ class GeminiService:
 
     def analyze_sentiment(self, text: str) -> Dict[str, Any]:
         """
-        Analyze sentiment of text using Gemini.
+        Analyze sentiment of financial text using Gemini with enhanced financial context.
 
         Args:
-            text: Text to analyze
+            text: Text to analyze (news article, earnings report, etc.)
 
         Returns:
-            Dict with sentiment score (-1 to 1), label, and confidence
+            Dict with sentiment score (-1 to 1), label, confidence, and reasoning
         """
-        prompt = f"""Analyze the sentiment of the following financial news article or text.
-Provide a sentiment score from -1.0 (very negative) to 1.0 (very positive), where 0 is neutral.
-Also provide a label (positive, neutral, or negative) and a confidence score (0 to 1).
+        prompt = f"""You are a financial sentiment analysis expert. Analyze the sentiment of the following financial text.
+
+IMPORTANT CONTEXT FOR FINANCIAL SENTIMENT:
+- Positive indicators: revenue growth, earnings beat, positive guidance, partnerships, expansion, innovation
+- Negative indicators: revenue miss, layoffs, regulatory issues, lawsuits, debt concerns, competition threats
+- Neutral: routine announcements, balanced reports, forward-looking statements without clear direction
+
+Consider:
+1. **Market impact**: How will this affect stock price?
+2. **Investor confidence**: Will this attract or repel investors?
+3. **Company fundamentals**: Does this strengthen or weaken the business?
+4. **Risk factors**: Are there hidden concerns or opportunities?
+
+EXAMPLES:
+- "Company reports Q3 revenue up 25% YoY, beating analyst expectations" → score: 0.75 (positive)
+- "CEO announces restructuring plan, 500 jobs to be cut" → score: -0.3 (slightly negative, could be seen as cost-cutting)
+- "Company maintains quarterly dividend at $0.50 per share" → score: 0.1 (neutral to slightly positive)
+- "SEC opens investigation into accounting practices" → score: -0.85 (very negative)
+
+Provide a sentiment score from -1.0 (very negative for investors) to 1.0 (very positive for investors), where 0 is neutral.
+Also provide a label (positive, neutral, or negative), confidence score (0 to 1), and brief reasoning.
 
 Respond ONLY with a JSON object in this exact format:
-{{"score": <float between -1 and 1>, "label": "<positive/neutral/negative>", "confidence": <float between 0 and 1>}}
+{{"score": <float between -1 and 1>, "label": "<positive/neutral/negative>", "confidence": <float between 0 and 1>, "reasoning": "<brief explanation>"}}
 
 Text to analyze:
 {text}
@@ -96,11 +114,13 @@ Text to analyze:
             score = max(-1.0, min(1.0, float(sentiment.get("score", 0))))
             label = sentiment.get("label", "neutral").lower()
             confidence = max(0.0, min(1.0, float(sentiment.get("confidence", 0.5))))
+            reasoning = sentiment.get("reasoning", "")
 
             return {
                 "score": score,
                 "label": label,
-                "confidence": confidence
+                "confidence": confidence,
+                "reasoning": reasoning
             }
         except Exception as e:
             logger.error(f"Error analyzing sentiment: {e}")
@@ -108,8 +128,25 @@ Text to analyze:
             return {
                 "score": 0.0,
                 "label": "neutral",
-                "confidence": 0.0
+                "confidence": 0.0,
+                "reasoning": "Error during analysis"
             }
+
+    def analyze_sentiment_batch(self, texts: List[str]) -> List[Dict[str, Any]]:
+        """
+        Analyze sentiment for multiple texts in batch.
+
+        Args:
+            texts: List of texts to analyze
+
+        Returns:
+            List of sentiment dictionaries
+        """
+        results = []
+        for text in texts:
+            result = self.analyze_sentiment(text)
+            results.append(result)
+        return results
 
     def is_finance_related(self, question: str) -> bool:
         """

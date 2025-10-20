@@ -169,3 +169,156 @@
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
 }
+
+/* Sentiment Demo Styles */
+.sentiment-demo {
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 2px solid #bae6fd;
+}
+
+.sentiment-demo-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.sentiment-demo-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.sentiment-demo-title h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #0c4a6e;
+}
+
+.sparkle-icon {
+  color: #0284c7;
+  animation: sparkle 2s ease-in-out infinite;
+}
+
+@keyframes sparkle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(1.1); }
+}
+
+.demo-close-btn {
+  background: none;
+  border: none;
+  font-size: 28px;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.demo-close-btn:hover {
+  background: #cbd5e1;
+  color: #1e293b;
+}
+
+.sentiment-demo-intro {
+  color: #1e40af;
+  line-height: 1.6;
+  margin-bottom: 1.5rem;
+  font-size: 0.95rem;
+}
+
+.sentiment-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.sentiment-example {
+  background: white;
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid #e0f2fe;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.sentiment-example:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.example-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  color: #334155;
+}
+
+.example-header svg {
+  color: #0284c7;
+}
+
+.example-text {
+  font-style: italic;
+  color: #1e293b;
+  margin: 0.5rem 0;
+  padding: 0.75rem;
+  background: #f8fafc;
+  border-left: 3px solid #0284c7;
+  border-radius: 4px;
+}
+
+.example-reasoning {
+  font-size: 0.875rem;
+  color: #475569;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.sentiment-factors {
+  background: white;
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid #e0f2fe;
+}
+
+.sentiment-factors h4 {
+  margin: 0 0 0.75rem 0;
+  font-size: 1rem;
+  color: #0c4a6e;
+}
+
+.sentiment-factors ul {
+  margin: 0;
+  padding-left: 1.5rem;
+  color: #475569;
+  line-height: 1.8;
+}
+
+.sentiment-factors li {
+  margin-bottom: 0.5rem;
+}
+
+@media (max-width: 768px) {
+  .sentiment-demo {
+    padding: 1rem;
+  }
+
+  .sentiment-demo-title h3 {
+    font-size: 1.1rem;
+  }
+
+  .example-text {
+    font-size: 0.9rem;
+  }
+}

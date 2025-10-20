@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, ExternalLink, Filter } from 'lucide-react';
+import { RefreshCw, ExternalLink, Filter, Info, Sparkles } from 'lucide-react';
 import { newsApi, positionsApi } from '../services/api';
 import { formatDistanceToNow } from 'date-fns';
 import { useToast } from '../components/Toast/ToastProvider';
@@ -12,6 +12,7 @@ function News() {
   const [sortBy, setSortBy] = useState('latest'); // latest, oldest, highest-sentiment, lowest-sentiment
   const [filterStock, setFilterStock] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
+  const [showSentimentDemo, setShowSentimentDemo] = useState(true);
 
   const { data: news, isLoading } = useQuery({
     queryKey: ['news'],
@@ -124,6 +125,75 @@ function News() {
             </button>
           </div>
         </div>
+
+        {showSentimentDemo && (
+          <div className="sentiment-demo card">
+            <div className="sentiment-demo-header">
+              <div className="sentiment-demo-title">
+                <Sparkles size={20} className="sparkle-icon" />
+                <h3>How Our Sentiment Analysis Works</h3>
+              </div>
+              <button
+                className="demo-close-btn"
+                onClick={() => setShowSentimentDemo(false)}
+                aria-label="Close demo"
+              >
+                ×
+              </button>
+            </div>
+            <p className="sentiment-demo-intro">
+              We use Google's Gemini AI to analyze financial news sentiment. Here's how it evaluates different types of news:
+            </p>
+
+            <div className="sentiment-examples">
+              <div className="sentiment-example">
+                <div className="example-header">
+                  <Info size={16} />
+                  <strong>Very Positive News</strong>
+                  <span className="sentiment-badge positive">+0.75</span>
+                </div>
+                <p className="example-text">"Company reports Q3 revenue up 25% YoY, beating analyst expectations"</p>
+                <p className="example-reasoning">
+                  <strong>Why:</strong> Revenue growth + earnings beat = strong investor confidence and likely stock price increase
+                </p>
+              </div>
+
+              <div className="sentiment-example">
+                <div className="example-header">
+                  <Info size={16} />
+                  <strong>Mixed/Neutral News</strong>
+                  <span className="sentiment-badge neutral">-0.30</span>
+                </div>
+                <p className="example-text">"CEO announces restructuring plan, 500 jobs to be cut"</p>
+                <p className="example-reasoning">
+                  <strong>Why:</strong> Layoffs are concerning, but restructuring can improve efficiency. Market reaction depends on execution.
+                </p>
+              </div>
+
+              <div className="sentiment-example">
+                <div className="example-header">
+                  <Info size={16} />
+                  <strong>Very Negative News</strong>
+                  <span className="sentiment-badge negative">-0.85</span>
+                </div>
+                <p className="example-text">"SEC opens investigation into accounting practices"</p>
+                <p className="example-reasoning">
+                  <strong>Why:</strong> Regulatory investigations signal serious concerns, erode investor trust, and often lead to significant price drops.
+                </p>
+              </div>
+            </div>
+
+            <div className="sentiment-factors">
+              <h4>Key Factors We Analyze:</h4>
+              <ul>
+                <li><strong>Market Impact:</strong> How will this affect the stock price?</li>
+                <li><strong>Investor Confidence:</strong> Will this attract or repel investors?</li>
+                <li><strong>Company Fundamentals:</strong> Does this strengthen or weaken the business?</li>
+                <li><strong>Risk Factors:</strong> Are there hidden concerns or opportunities?</li>
+              </ul>
+            </div>
+          </div>
+        )}
 
         {showFilters && (
           <div className="news-filters card">
