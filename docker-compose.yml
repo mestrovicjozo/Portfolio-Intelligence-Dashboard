@@ -33,6 +33,8 @@ services:
     volumes:
       - .:/app
       - ./data/chroma:/backend/data/chroma
+      - ./exports:/app/exports
+      - ./backups:/app/backups
     depends_on:
       postgres:
         condition: service_healthy
@@ -58,3 +60,5 @@ services:
 volumes:
   postgres_data:
   chroma_data:
+  exports:
+  backups:
