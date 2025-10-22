@@ -10,8 +10,8 @@ export const useWebSocket = (url, options = {}) => {
     onOpen,
     onClose,
     onError,
-    reconnectInterval = 3000,
-    reconnectAttempts = 5,
+    reconnectInterval = 10000, // Increased to 10 seconds to reduce spam
+    reconnectAttempts = 2, // Reduced to 2 attempts to avoid console spam
   } = options;
 
   const ws = useRef(null);
@@ -47,24 +47,29 @@ export const useWebSocket = (url, options = {}) => {
       };
 
       ws.current.onerror = (error) => {
-        console.error('WebSocket error:', error);
+        // Only log on first error to reduce console spam
+        if (reconnectCount.current === 0) {
+          console.warn('WebSocket connection failed (will retry silently)');
+        }
         if (onError) onError(error);
       };
 
       ws.current.onclose = (event) => {
-        console.log('WebSocket closed');
+        // Only log disconnect on first attempt
+        if (reconnectCount.current === 0) {
+          console.log('WebSocket disconnected');
+        }
         setIsConnected(false);
         if (onClose) onClose(event);
 
         // Attempt to reconnect
         if (reconnectCount.current < reconnectAttempts) {
           reconnectCount.current += 1;
-          console.log(
-            `Reconnecting... (${reconnectCount.current}/${reconnectAttempts})`
-          );
+          // Only log first reconnection attempt
+          if (reconnectCount.current === 1) {
+            console.log('WebSocket: Will retry connection...');
+          }
           reconnectTimeout.current = setTimeout(connect, reconnectInterval);
-        } else {
-          console.log('Max reconnection attempts reached');
         }
       };
     } catch (error) {
