@@ -139,11 +139,23 @@ function Dashboard() {
             <p className="portfolio-description">Your investment portfolio dashboard</p>
           </div>
           <div className="dashboard-actions">
-            <button className="btn btn-secondary" onClick={() => setShowImportCSV(true)}>
+            <button
+              className="btn btn-secondary"
+              onClick={() => {
+                console.log('Import CSV button clicked!');
+                setShowImportCSV(true);
+              }}
+            >
               <Upload size={20} />
               Import CSV
             </button>
-            <button className="btn btn-primary" onClick={() => setShowAddPosition(true)}>
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                console.log('Add Position button clicked!');
+                setShowAddPosition(true);
+              }}
+            >
               <Plus size={20} />
               Add Position
             </button>

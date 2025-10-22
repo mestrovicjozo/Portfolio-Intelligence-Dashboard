@@ -33,11 +33,11 @@ class CurrencyConverter:
                 return self._cached_rate
 
         try:
-            # Fetch EUR/USD exchange rate from Yahoo Finance
+            # Fetch EUR/USD exchange rate from Yahoo Finance with timeout
             eurusd = yf.Ticker("EURUSD=X")
-            data = eurusd.history(period="1d")
+            data = eurusd.history(period="1d", timeout=2)  # 2 second timeout
 
-            if not data.empty:
+            if not data.empty and len(data) > 0:
                 # Get the most recent close price (EUR/USD rate)
                 rate = float(data['Close'].iloc[-1])
 
@@ -49,11 +49,19 @@ class CurrencyConverter:
                 return rate
             else:
                 logger.warning("No exchange rate data returned, using fallback rate")
-                return self._get_fallback_rate()
+                # Cache the fallback so we don't keep retrying
+                fallback = self._get_fallback_rate()
+                self._cached_rate = fallback
+                self._cache_timestamp = datetime.now()
+                return fallback
 
         except Exception as e:
-            logger.error(f"Error fetching USD/EUR rate: {e}")
-            return self._get_fallback_rate()
+            logger.warning(f"Error fetching USD/EUR rate (using fallback): {e}")
+            # Cache the fallback to prevent repeated failures
+            fallback = self._get_fallback_rate()
+            self._cached_rate = fallback
+            self._cache_timestamp = datetime.now()
+            return fallback
 
     def _get_fallback_rate(self) -> float:
         """
