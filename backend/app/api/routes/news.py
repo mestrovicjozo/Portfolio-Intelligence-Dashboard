@@ -2,16 +2,17 @@ from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timedelta
+import asyncio
 
 from backend.app.db.base import get_db
 from backend.app.models import NewsArticle, Stock, ArticleStock
 from backend.app.schemas.news_article import NewsArticle as NewsArticleSchema, NewsArticleWithStocks
-from backend.app.services.alpha_vantage import AlphaVantageService
+from backend.app.services.news_collector import NewsCollectorService
 from backend.app.services.gemini_service import GeminiService
 from backend.app.services.vector_store import VectorStoreService
 
 router = APIRouter()
-av_service = AlphaVantageService()
+news_collector = NewsCollectorService()
 gemini_service = GeminiService()
 vector_store = VectorStoreService()
 
@@ -47,7 +48,7 @@ def list_news(
 
 @router.post("/refresh", response_model=dict)
 async def refresh_news(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    """Fetch and process latest news for all stocks in portfolio."""
+    """Fetch and process latest news for all stocks in portfolio using ActuallyFreeAPI."""
     stocks = db.query(Stock).all()
 
     if not stocks:
@@ -56,78 +57,91 @@ async def refresh_news(background_tasks: BackgroundTasks, db: Session = Depends(
             detail="No stocks in portfolio. Add stocks first."
         )
 
-    # Fetch news for all stocks
-    ticker_list = ",".join([stock.symbol for stock in stocks])
-
     try:
-        # Get news from Alpha Vantage
-        news_items = av_service.get_news_sentiment(tickers=ticker_list, limit=50)
-
         new_count = 0
         updated_count = 0
 
-        for item in news_items:
-            # Check if article already exists
-            existing = db.query(NewsArticle).filter(
-                NewsArticle.url == item["url"]
-            ).first()
-
-            # Determine which stocks are related to this article
-            related_stocks = []
-            for stock in stocks:
-                if stock.symbol in item.get("ticker_sentiment", {}):
-                    related_stocks.append(stock)
-
-            if not related_stocks:
-                continue
-
-            # Create or update article
-            if existing:
-                # Update sentiment if changed
-                if existing.sentiment_score != item["overall_sentiment_score"]:
-                    existing.sentiment_score = item["overall_sentiment_score"]
-                    updated_count += 1
-            else:
-                # Create new article
-                article = NewsArticle(
-                    title=item["title"],
-                    source=item["source"],
-                    url=item["url"],
-                    published_at=item["published_at"],
-                    summary=item["summary"],
-                    sentiment_score=item["overall_sentiment_score"]
+        # Fetch news for each stock ticker from ActuallyFreeAPI
+        for stock in stocks:
+            try:
+                # Get news articles for this ticker
+                articles = await news_collector.fetch_from_actually_free_api(
+                    ticker=stock.symbol,
+                    limit=10  # 10 articles per stock
                 )
-                db.add(article)
-                db.flush()  # Get article ID
 
-                # Link to stocks
-                for stock in related_stocks:
+                for item in articles:
+                    # Check if article already exists by URL
+                    existing = db.query(NewsArticle).filter(
+                        NewsArticle.url == item.get("url")
+                    ).first()
+
+                    if existing:
+                        continue
+
+                    # Use Gemini to analyze sentiment from title
+                    sentiment_score = 0.0  # Default neutral
+                    title = item.get("title", "")
+
+                    if title:
+                        try:
+                            # Analyze sentiment using Gemini
+                            sentiment_prompt = f"Analyze the sentiment of this stock news headline and return ONLY a number between -1.0 (very negative) and 1.0 (very positive). Headline: {title}"
+                            sentiment_response = gemini_service.generate_text(sentiment_prompt)
+
+                            # Extract number from response
+                            try:
+                                sentiment_score = float(sentiment_response.strip())
+                                # Clamp to -1.0 to 1.0 range
+                                sentiment_score = max(-1.0, min(1.0, sentiment_score))
+                            except:
+                                sentiment_score = 0.0
+                        except Exception as e:
+                            print(f"Error analyzing sentiment: {e}")
+                            sentiment_score = 0.0
+
+                    # Create new article
+                    article = NewsArticle(
+                        title=title,
+                        source=item.get("source", "Unknown"),
+                        url=item.get("url"),
+                        published_at=item.get("published_at") or datetime.now(),
+                        summary=title,  # Use title as summary since we don't scrape
+                        sentiment_score=sentiment_score
+                    )
+                    db.add(article)
+                    db.flush()
+
+                    # Link article to stock
                     article_stock = ArticleStock(
                         article_id=article.id,
                         stock_id=stock.id
                     )
                     db.add(article_stock)
 
-                # Generate embedding and add to vector store in background
-                content = f"{item['title']}. {item['summary']}"
-                try:
-                    embedding = gemini_service.generate_embedding(content)
-                    vector_store.add_article(
-                        article_id=article.id,
-                        content=content,
-                        embedding=embedding,
-                        metadata={
-                            "title": item["title"],
-                            "source": item["source"],
-                            "published_at": str(item["published_at"]),
-                            "sentiment_score": item["overall_sentiment_score"],
-                            "stocks": [s.symbol for s in related_stocks]
-                        }
-                    )
-                except Exception as e:
-                    print(f"Error adding to vector store: {e}")
+                    # Add to vector store for semantic search
+                    try:
+                        embedding = gemini_service.generate_embedding(title)
+                        vector_store.add_article(
+                            article_id=article.id,
+                            content=title,
+                            embedding=embedding,
+                            metadata={
+                                "title": title,
+                                "source": item.get("source", "Unknown"),
+                                "published_at": str(article.published_at),
+                                "sentiment_score": sentiment_score,
+                                "stocks": [stock.symbol]
+                            }
+                        )
+                    except Exception as e:
+                        print(f"Error adding to vector store: {e}")
 
-                new_count += 1
+                    new_count += 1
+
+            except Exception as e:
+                print(f"Error fetching news for {stock.symbol}: {e}")
+                continue
 
         db.commit()
 
