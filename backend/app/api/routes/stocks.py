@@ -1,12 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime, timedelta
+import os
 
 from backend.app.db.base import get_db
 from backend.app.models import Stock, StockPrice
 from backend.app.schemas.stock import Stock as StockSchema, StockCreate, StockWithPrice
 from backend.app.services.alpha_vantage import AlphaVantageService
+from backend.app.services.logo_service import logo_service
+from backend.app.core.config import settings
 
 router = APIRouter()
 av_service = AlphaVantageService()
@@ -25,6 +29,10 @@ def list_stocks(db: Session = Depends(get_db)):
         ).order_by(StockPrice.date.desc()).first()
 
         stock_dict = StockSchema.from_orm(stock).dict()
+
+        # Add logo URL if logo exists
+        if stock.logo_filename:
+            stock_dict["logo_url"] = f"/api/stocks/{stock.symbol}/logo/"
 
         if latest_price:
             # Get previous day's price for comparison
@@ -83,7 +91,7 @@ def add_stock(stock_data: StockCreate, db: Session = Depends(get_db)):
     return db_stock
 
 
-@router.get("/{symbol}", response_model=StockWithPrice)
+@router.get("/{symbol}/", response_model=StockWithPrice)
 def get_stock(symbol: str, db: Session = Depends(get_db)):
     """Get stock details by symbol."""
     stock = db.query(Stock).filter(Stock.symbol == symbol.upper()).first()
@@ -99,6 +107,10 @@ def get_stock(symbol: str, db: Session = Depends(get_db)):
     ).order_by(StockPrice.date.desc()).first()
 
     stock_dict = StockSchema.from_orm(stock).dict()
+
+    # Add logo URL if logo exists
+    if stock.logo_filename:
+        stock_dict["logo_url"] = f"/api/stocks/{stock.symbol}/logo/"
 
     if latest_price:
         prev_price = db.query(StockPrice).filter(
@@ -224,3 +236,128 @@ def search_stock_symbol(keywords: str):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error searching stocks: {str(e)}"
         )
+
+
+@router.post("/{symbol}/logo/", response_model=dict)
+async def upload_logo(
+    symbol: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Upload a logo for a stock.
+
+    Args:
+        symbol: Stock ticker symbol
+        file: Logo image file (PNG, JPG, SVG, etc.)
+    """
+    # Verify stock exists
+    stock = db.query(Stock).filter(Stock.symbol == symbol.upper()).first()
+    if not stock:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Stock {symbol} not found"
+        )
+
+    # Validate file size
+    content = await file.read()
+    if len(content) > settings.MAX_LOGO_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File too large. Maximum size: {settings.MAX_LOGO_SIZE / 1024 / 1024}MB"
+        )
+
+    # Get file extension
+    extension = file.filename.split('.')[-1].lower() if '.' in file.filename else ''
+
+    try:
+        # Save logo to file system
+        filename = logo_service.save_logo(symbol.upper(), content, extension)
+
+        # Update database
+        stock.logo_filename = filename
+        db.commit()
+
+        return {
+            "message": f"Logo uploaded successfully for {symbol}",
+            "filename": filename,
+            "logo_url": f"/api/stocks/{symbol.upper()}/logo/"
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error uploading logo: {str(e)}"
+        )
+
+
+@router.get("/{symbol}/logo/")
+async def get_logo(symbol: str, db: Session = Depends(get_db)):
+    """
+    Get the logo file for a stock.
+
+    Args:
+        symbol: Stock ticker symbol
+
+    Returns:
+        Logo image file
+    """
+    # Get stock to check logo_filename
+    stock = db.query(Stock).filter(Stock.symbol == symbol.upper()).first()
+
+    # Try to find logo file
+    logo_path = logo_service.get_logo_path(symbol.upper())
+
+    if not logo_path or not logo_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Logo not found for {symbol}"
+        )
+
+    # Determine media type
+    extension = logo_path.suffix.lower().lstrip('.')
+    media_type_map = {
+        'png': 'image/png',
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'svg': 'image/svg+xml',
+        'webp': 'image/webp'
+    }
+    media_type = media_type_map.get(extension, 'application/octet-stream')
+
+    return FileResponse(
+        path=str(logo_path),
+        media_type=media_type,
+        filename=logo_path.name
+    )
+
+
+@router.delete("/{symbol}/logo/", status_code=status.HTTP_204_NO_CONTENT)
+def delete_logo(symbol: str, db: Session = Depends(get_db)):
+    """
+    Delete the logo for a stock.
+
+    Args:
+        symbol: Stock ticker symbol
+    """
+    # Verify stock exists
+    stock = db.query(Stock).filter(Stock.symbol == symbol.upper()).first()
+    if not stock:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Stock {symbol} not found"
+        )
+
+    # Delete logo file
+    deleted = logo_service.delete_logo(symbol.upper())
+
+    if deleted:
+        # Update database
+        stock.logo_filename = None
+        db.commit()
+
+    return None

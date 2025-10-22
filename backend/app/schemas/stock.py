@@ -8,6 +8,7 @@ class StockBase(BaseModel):
     symbol: str = Field(..., max_length=10, description="Stock ticker symbol")
     name: str = Field(..., max_length=255, description="Company name")
     sector: Optional[str] = Field(None, max_length=100, description="Industry sector")
+    logo_url: Optional[str] = Field(None, description="URL to stock logo")
 
 
 class StockCreate(StockBase):
@@ -24,6 +25,7 @@ class StockUpdate(BaseModel):
 class Stock(StockBase):
     """Schema for stock response."""
     id: int
+    logo_url: Optional[str] = None  # Will be populated by API based on logo_filename
     added_at: datetime
 
     class Config:

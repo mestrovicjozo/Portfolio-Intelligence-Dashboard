@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     BACKUP_DIR: str = str(Path(__file__).parent.parent.parent.parent / "backups")
     EXPORT_RETENTION_DAYS: int = 180  # Keep exports for 6 months
 
+    # Stock logo settings
+    LOGO_DIR: str = str(Path(__file__).parent.parent.parent.parent / "data" / "logos")
+    MAX_LOGO_SIZE: int = 2_097_152  # 2MB max file size
+    ALLOWED_LOGO_EXTENSIONS: List[str] = ["png", "jpg", "jpeg", "svg", "webp"]
+
     class Config:
         env_file = ".env"
         case_sensitive = True

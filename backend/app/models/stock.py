@@ -13,6 +13,7 @@ class Stock(Base):
     symbol = Column(String(10), unique=True, nullable=False, index=True)
     name = Column(String(255), nullable=False)
     sector = Column(String(100), nullable=True)
+    logo_filename = Column(String(255), nullable=True)  # Filename of logo (e.g., "AAPL.png")
     added_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships

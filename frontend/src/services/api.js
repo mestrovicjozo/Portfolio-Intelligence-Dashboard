@@ -46,6 +46,18 @@ export const stocksApi = {
   getArticles: (symbol, limit = 10) => api.get(`/stocks/${symbol}/articles/`, { params: { limit } }),
   getInsights: (symbol) => api.post(`/stocks/${symbol}/insights/`),
   askQuestion: (symbol, question) => api.post(`/stocks/${symbol}/ask/`, null, { params: { question } }),
+  // Logo management
+  uploadLogo: (symbol, file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post(`/stocks/${symbol}/logo/`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+  getLogo: (symbol) => `${API_BASE_URL}/stocks/${symbol}/logo/`,
+  deleteLogo: (symbol) => api.delete(`/stocks/${symbol}/logo/`),
 };
 
 // News API
