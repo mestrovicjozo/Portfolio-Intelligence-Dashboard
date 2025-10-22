@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     SCHEDULER_TIMEZONE: str = "America/New_York"
     PRICE_COLLECTION_TIME: str = "17:00"  # 5:00 PM ET (after market close)
     NEWS_COLLECTION_TIME: str = "19:00"  # 7:00 PM ET
-    WEEKLY_EXPORT_DAY: str = "sunday"  # Day of week for exports
+    WEEKLY_EXPORT_DAY: str = "sun"  # Day of week for exports (sun, mon, tue, wed, thu, fri, sat)
     WEEKLY_EXPORT_TIME: str = "02:00"  # 2:00 AM on export day
     MONTHLY_BACKUP_DAY: int = 1  # Day of month (1-31)
     MONTHLY_BACKUP_TIME: str = "03:00"  # 3:00 AM on backup day

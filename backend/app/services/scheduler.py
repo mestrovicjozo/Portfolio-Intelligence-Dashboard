@@ -115,7 +115,11 @@ class SchedulerService:
             name='Weekly Data Export',
             replace_existing=True
         )
-        logger.info(f"Registered: Weekly Data Export ({settings.WEEKLY_EXPORT_DAY.capitalize()} at {settings.WEEKLY_EXPORT_TIME} ET)")
+        # Map abbreviated weekday to full name for logging
+        weekday_names = {"sun": "Sunday", "mon": "Monday", "tue": "Tuesday", "wed": "Wednesday",
+                         "thu": "Thursday", "fri": "Friday", "sat": "Saturday"}
+        weekday_display = weekday_names.get(settings.WEEKLY_EXPORT_DAY.lower(), settings.WEEKLY_EXPORT_DAY)
+        logger.info(f"Registered: Weekly Data Export ({weekday_display} at {settings.WEEKLY_EXPORT_TIME} ET)")
 
         # Job 4: Monthly Database Backup (1st of month at 3:00 AM ET)
         self.scheduler.add_job(
