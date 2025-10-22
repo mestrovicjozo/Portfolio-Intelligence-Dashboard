@@ -30,9 +30,8 @@ def list_stocks(db: Session = Depends(get_db)):
 
         stock_dict = StockSchema.from_orm(stock).dict()
 
-        # Add logo URL if logo exists
-        if stock.logo_filename:
-            stock_dict["logo_url"] = f"/api/stocks/{stock.symbol}/logo/"
+        # Always add logo URL (will use default if specific logo doesn't exist)
+        stock_dict["logo_url"] = f"/api/stocks/{stock.symbol}/logo/"
 
         if latest_price:
             # Get previous day's price for comparison
@@ -108,9 +107,8 @@ def get_stock(symbol: str, db: Session = Depends(get_db)):
 
     stock_dict = StockSchema.from_orm(stock).dict()
 
-    # Add logo URL if logo exists
-    if stock.logo_filename:
-        stock_dict["logo_url"] = f"/api/stocks/{stock.symbol}/logo/"
+    # Always add logo URL (will use default if specific logo doesn't exist)
+    stock_dict["logo_url"] = f"/api/stocks/{stock.symbol}/logo/"
 
     if latest_price:
         prev_price = db.query(StockPrice).filter(
@@ -298,24 +296,21 @@ async def upload_logo(
 @router.get("/{symbol}/logo/")
 async def get_logo(symbol: str, db: Session = Depends(get_db)):
     """
-    Get the logo file for a stock.
+    Get the logo file for a stock. Returns default logo if specific logo doesn't exist.
 
     Args:
         symbol: Stock ticker symbol
 
     Returns:
-        Logo image file
+        Logo image file (specific or default)
     """
-    # Get stock to check logo_filename
-    stock = db.query(Stock).filter(Stock.symbol == symbol.upper()).first()
-
-    # Try to find logo file
-    logo_path = logo_service.get_logo_path(symbol.upper())
+    # Try to find logo file (will return default if specific doesn't exist)
+    logo_path = logo_service.get_logo_path(symbol.upper(), use_default=True)
 
     if not logo_path or not logo_path.exists():
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Logo not found for {symbol}"
+            detail=f"No logo available for {symbol}"
         )
 
     # Determine media type

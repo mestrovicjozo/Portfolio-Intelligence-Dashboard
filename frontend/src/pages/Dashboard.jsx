@@ -247,18 +247,17 @@ function Dashboard() {
                     >
                       <div className="position-compact-left">
                         <div className="stock-logo">
-                          {position.stock.logo_url ? (
-                            <img
-                              src={`http://localhost:8000${position.stock.logo_url}`}
-                              alt={position.stock.symbol}
-                              className="stock-logo-img"
-                              onError={(e) => {
-                                e.target.style.display = 'none';
-                                e.target.nextSibling.style.display = 'flex';
-                              }}
-                            />
-                          ) : null}
-                          <span className="stock-logo-text" style={{ display: position.stock.logo_url ? 'none' : 'flex' }}>
+                          <img
+                            src={`http://localhost:8000${position.stock.logo_url}`}
+                            alt={position.stock.symbol}
+                            className="stock-logo-img"
+                            onError={(e) => {
+                              // If image fails to load, show 2-letter fallback
+                              e.target.style.display = 'none';
+                              e.target.nextSibling.style.display = 'flex';
+                            }}
+                          />
+                          <span className="stock-logo-text" style={{ display: 'none' }}>
                             {position.stock.symbol.substring(0, 2)}
                           </span>
                         </div>

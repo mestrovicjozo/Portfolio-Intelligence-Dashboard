@@ -472,6 +472,10 @@ def get_position_details(db: Session, position: Position) -> PositionWithDetails
     day_change = (current_price - previous_close) if (current_price and previous_close) else None
     day_change_percent = ((day_change / previous_close) * 100) if (day_change and previous_close) else None
 
+    # Convert stock to dict and add logo URL
+    stock_dict = StockSchema.from_orm(stock).dict()
+    stock_dict["logo_url"] = f"/api/stocks/{stock.symbol}/logo/"
+
     return PositionWithDetails(
         id=position.id,
         portfolio_id=position.portfolio_id,
@@ -480,7 +484,7 @@ def get_position_details(db: Session, position: Position) -> PositionWithDetails
         average_cost=position.average_cost,
         created_at=position.created_at,
         updated_at=position.updated_at,
-        stock=StockSchema.from_orm(stock),
+        stock=stock_dict,
         current_price=round(current_price, 2) if current_price else None,
         total_cost=round(total_cost, 2),
         current_value=round(current_value, 2) if current_value else None,
