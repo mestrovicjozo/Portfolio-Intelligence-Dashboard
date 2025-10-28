@@ -88,10 +88,12 @@ class NewsCollectorService:
                     # Check if there are more pages
                     pagination = data.get("pagination", {})
                     has_next = pagination.get("hasNextPage", False)
+                    total_pages = pagination.get("totalPages", 3)
 
-                    # Fetch additional pages (max 3 pages total to avoid overwhelming)
+                    # Fetch ALL pages to get complete dataset
                     page = 2
-                    while has_next and page <= 3:
+                    max_pages = min(total_pages, 50)  # Cap at 50 pages to be safe (5000 articles)
+                    while has_next and page <= max_pages:
                         params["page"] = page
                         async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=30)) as page_response:
                             if page_response.status == 200:

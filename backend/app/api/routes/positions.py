@@ -19,6 +19,7 @@ from backend.app.schemas.position import (
 from backend.app.schemas.stock import Stock as StockSchema
 from backend.app.services.alpha_vantage import AlphaVantageService
 from backend.app.services.yahoo_finance import YahooFinanceService
+from backend.app.services.custom_stock_api import CustomStockAPIService
 from backend.app.services.gemini_service import GeminiService
 from backend.app.services.vector_store import VectorStoreService
 from backend.app.services.background_jobs import background_job_service, JobStatus
@@ -30,6 +31,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 alpha_vantage = AlphaVantageService(settings.ALPHA_VANTAGE_API_KEY)
 yahoo_finance = YahooFinanceService()
+custom_api = CustomStockAPIService()
 gemini_service = GeminiService()
 vector_store = VectorStoreService()
 
@@ -534,15 +536,22 @@ async def import_positions_from_csv(
         skipped_count = 0
         errors = []
 
+        logger.info(f"Starting CSV import. CSV headers: {csv_reader.fieldnames}")
+
         for row_num, row in enumerate(csv_reader, start=2):  # Start at 2 (header is row 1)
             try:
+                # Log the row for debugging
+                logger.debug(f"Row {row_num}: {row}")
+
                 # Skip the "Total" row
                 if row.get('Slice', '').upper() == 'TOTAL':
+                    logger.info(f"Skipping Total row at line {row_num}")
                     continue
 
                 symbol = row.get('Slice', '').strip().upper()
                 if not symbol:
                     skipped_count += 1
+                    logger.debug(f"Row {row_num}: Empty symbol, skipping")
                     continue
 
                 # Map Trading 212 symbol to standard ticker if needed
@@ -625,14 +634,18 @@ async def import_positions_from_csv(
                 if needs_price_data:
                     prices = []
 
-                    # Try Alpha Vantage first
+                    # Try Finnhub first (primary source)
                     try:
                         logger.info(f"Fetching price data for stock: {stock.symbol} (new={is_new_stock}, existing_prices={existing_price_count})")
-                        prices = alpha_vantage.get_daily_prices(stock.symbol, outputsize="compact")
-                        logger.info(f"Alpha Vantage: Received {len(prices)} price records for {stock.symbol}")
+                        prices = finnhub_service.get_daily_prices(stock.symbol, days=100)
+                        if prices:
+                            logger.info(f"Finnhub: Received {len(prices)} price records for {stock.symbol}")
+                        else:
+                            logger.warning(f"Finnhub returned no data for {stock.symbol}")
                     except Exception as e:
-                        # If Alpha Vantage fails (rate limit), try Yahoo Finance as fallback
-                        logger.warning(f"Alpha Vantage failed for {stock.symbol}: {str(e)}")
+                        logger.warning(f"Finnhub failed for {stock.symbol}: {str(e)}")
+
+                        # Fallback to Yahoo Finance if Finnhub fails
                         logger.info(f"Trying Yahoo Finance fallback for {stock.symbol}")
                         try:
                             prices = yahoo_finance.get_daily_prices(stock.symbol, days=100)

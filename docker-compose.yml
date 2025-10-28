@@ -1,4 +1,4 @@
-version: '3.8'
+#version: '3.8'
 
 services:
   postgres:
@@ -38,7 +38,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 --reload --log-level warning --no-access-log
     working_dir: /app
 
   frontend:

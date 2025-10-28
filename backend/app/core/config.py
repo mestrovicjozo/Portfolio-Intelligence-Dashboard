@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     # API Keys
     ALPHA_VANTAGE_API_KEY: str
     GEMINI_API_KEY: str
+    FINNHUB_API_KEY: str
 
     # Database
     DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/portfolio_intelligence"
@@ -27,7 +28,7 @@ class Settings(BaseSettings):
     ALPHA_VANTAGE_BASE_URL: str = "https://www.alphavantage.co/query"
 
     # Gemini settings
-    GEMINI_MODEL: str = "gemini-1.5-flash"
+    GEMINI_MODEL: str = "gemini-2.5-flash"
     EMBEDDING_DIMENSION: int = 768
 
     # Scheduler settings

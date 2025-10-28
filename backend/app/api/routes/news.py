@@ -48,7 +48,7 @@ def list_news(
 
 @router.post("/refresh", response_model=dict)
 async def refresh_news(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    """Fetch and process latest news for all stocks in portfolio using ActuallyFreeAPI."""
+    """Fetch ALL news from ActuallyFreeAPI and associate with portfolio stocks."""
     stocks = db.query(Stock).all()
 
     if not stocks:
@@ -57,98 +57,115 @@ async def refresh_news(background_tasks: BackgroundTasks, db: Session = Depends(
             detail="No stocks in portfolio. Add stocks first."
         )
 
+    # Create a set of portfolio tickers for quick lookup
+    portfolio_tickers = {stock.symbol.upper() for stock in stocks}
+    stock_map = {stock.symbol.upper(): stock for stock in stocks}
+
     try:
         new_count = 0
         updated_count = 0
+        skipped_count = 0
 
-        # Fetch news for each stock ticker from ActuallyFreeAPI
-        for stock in stocks:
+        # Fetch ALL articles from ActuallyFreeAPI (no ticker filter)
+        articles = await news_collector.fetch_from_actually_free_api(
+            ticker=None,  # Get all articles
+            limit=100  # Max per page
+        )
+
+        for item in articles:
             try:
-                # Get news articles for this ticker
-                articles = await news_collector.fetch_from_actually_free_api(
-                    ticker=stock.symbol,
-                    limit=10  # 10 articles per stock
-                )
+                # Extract tickers from article
+                article_tickers = item.get("tickers", [])
 
-                for item in articles:
-                    # Check if article already exists by URL
-                    existing = db.query(NewsArticle).filter(
-                        NewsArticle.url == item.get("url")
-                    ).first()
+                # Find which tickers are in our portfolio
+                relevant_tickers = [t.upper() for t in article_tickers if t.upper() in portfolio_tickers]
 
-                    if existing:
-                        continue
+                if not relevant_tickers:
+                    skipped_count += 1
+                    continue
 
-                    # Use Gemini to analyze sentiment from title
-                    sentiment_score = 0.0  # Default neutral
-                    title = item.get("title", "")
+                # Check if article already exists by URL
+                existing = db.query(NewsArticle).filter(
+                    NewsArticle.url == item.get("url")
+                ).first()
 
-                    if title:
+                if existing:
+                    continue
+
+                # Use Gemini to analyze sentiment from title
+                sentiment_score = 0.0  # Default neutral
+                title = item.get("title", "")
+
+                if title:
+                    try:
+                        # Analyze sentiment using Gemini
+                        sentiment_prompt = f"Analyze the sentiment of this stock news headline and return ONLY a number between -1.0 (very negative) and 1.0 (very positive). Headline: {title}"
+                        sentiment_response = gemini_service.generate_text(sentiment_prompt)
+
+                        # Extract number from response
                         try:
-                            # Analyze sentiment using Gemini
-                            sentiment_prompt = f"Analyze the sentiment of this stock news headline and return ONLY a number between -1.0 (very negative) and 1.0 (very positive). Headline: {title}"
-                            sentiment_response = gemini_service.generate_text(sentiment_prompt)
-
-                            # Extract number from response
-                            try:
-                                sentiment_score = float(sentiment_response.strip())
-                                # Clamp to -1.0 to 1.0 range
-                                sentiment_score = max(-1.0, min(1.0, sentiment_score))
-                            except:
-                                sentiment_score = 0.0
-                        except Exception as e:
-                            print(f"Error analyzing sentiment: {e}")
+                            sentiment_score = float(sentiment_response.strip())
+                            # Clamp to -1.0 to 1.0 range
+                            sentiment_score = max(-1.0, min(1.0, sentiment_score))
+                        except:
                             sentiment_score = 0.0
+                    except Exception as e:
+                        print(f"Error analyzing sentiment: {e}")
+                        sentiment_score = 0.0
 
-                    # Create new article
-                    article = NewsArticle(
-                        title=title,
-                        source=item.get("source", "Unknown"),
-                        url=item.get("url"),
-                        published_at=item.get("published_at") or datetime.now(),
-                        summary=title,  # Use title as summary since we don't scrape
-                        sentiment_score=sentiment_score
-                    )
-                    db.add(article)
-                    db.flush()
+                # Create new article
+                article = NewsArticle(
+                    title=title,
+                    source=item.get("source", "Unknown"),
+                    url=item.get("url"),
+                    published_at=item.get("published_at") or datetime.now(),
+                    summary=item.get("summary", title),
+                    sentiment_score=sentiment_score
+                )
+                db.add(article)
+                db.flush()
 
-                    # Link article to stock
+                # Link article to all relevant stocks in portfolio
+                for ticker in relevant_tickers:
+                    stock = stock_map[ticker]
                     article_stock = ArticleStock(
                         article_id=article.id,
                         stock_id=stock.id
                     )
                     db.add(article_stock)
 
-                    # Add to vector store for semantic search
-                    try:
-                        embedding = gemini_service.generate_embedding(title)
-                        vector_store.add_article(
-                            article_id=article.id,
-                            content=title,
-                            embedding=embedding,
-                            metadata={
-                                "title": title,
-                                "source": item.get("source", "Unknown"),
-                                "published_at": str(article.published_at),
-                                "sentiment_score": sentiment_score,
-                                "stocks": [stock.symbol]
-                            }
-                        )
-                    except Exception as e:
-                        print(f"Error adding to vector store: {e}")
+                # Add to vector store for semantic search
+                try:
+                    embedding = gemini_service.generate_embedding(title)
+                    vector_store.add_article(
+                        article_id=article.id,
+                        content=title,
+                        embedding=embedding,
+                        metadata={
+                            "title": title,
+                            "source": item.get("source", "Unknown"),
+                            "published_at": str(article.published_at),
+                            "sentiment_score": sentiment_score,
+                            "stocks": relevant_tickers
+                        }
+                    )
+                except Exception as e:
+                    print(f"Error adding to vector store: {e}")
 
-                    new_count += 1
+                new_count += 1
 
             except Exception as e:
-                print(f"Error fetching news for {stock.symbol}: {e}")
+                print(f"Error processing article: {e}")
                 continue
 
         db.commit()
 
         return {
             "message": "News refresh completed",
+            "total_fetched": len(articles),
             "new_articles": new_count,
-            "updated_articles": updated_count
+            "updated_articles": updated_count,
+            "skipped": skipped_count
         }
 
     except Exception as e:

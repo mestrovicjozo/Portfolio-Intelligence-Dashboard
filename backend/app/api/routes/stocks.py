@@ -9,11 +9,16 @@ from backend.app.db.base import get_db
 from backend.app.models import Stock, StockPrice
 from backend.app.schemas.stock import Stock as StockSchema, StockCreate, StockWithPrice
 from backend.app.services.alpha_vantage import AlphaVantageService
+from backend.app.services.custom_stock_api import CustomStockAPIService
 from backend.app.services.logo_service import logo_service
 from backend.app.core.config import settings
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 av_service = AlphaVantageService()
+custom_api = CustomStockAPIService()
 
 
 @router.get("/", response_model=List[StockWithPrice])
@@ -356,3 +361,69 @@ def delete_logo(symbol: str, db: Session = Depends(get_db)):
         db.commit()
 
     return None
+
+
+@router.post("/update-prices", response_model=dict)
+def update_current_prices(db: Session = Depends(get_db)):
+    """
+    Update current prices for all stocks from custom API.
+    """
+    try:
+        # Fetch all current prices from custom API
+        prices = custom_api.get_current_prices()
+
+        if not prices:
+            raise HTTPException(status_code=500, detail="Failed to fetch prices from API")
+
+        updated_count = 0
+        today = datetime.now().date()
+
+        for ticker, price_eur in prices.items():
+            # Find the stock in database
+            stock = db.query(Stock).filter(Stock.symbol == ticker).first()
+
+            if not stock:
+                logger.debug(f"Stock {ticker} not in database, skipping")
+                continue
+
+            # Check if today's price already exists
+            existing_price = db.query(StockPrice).filter(
+                StockPrice.stock_id == stock.id,
+                StockPrice.date == today
+            ).first()
+
+            if existing_price:
+                # Update existing price
+                existing_price.close = price_eur
+                existing_price.open = price_eur
+                existing_price.high = price_eur
+                existing_price.low = price_eur
+            else:
+                # Create new price record
+                new_price = StockPrice(
+                    stock_id=stock.id,
+                    date=today,
+                    open=price_eur,
+                    high=price_eur,
+                    low=price_eur,
+                    close=price_eur,
+                    volume=0
+                )
+                db.add(new_price)
+
+            updated_count += 1
+
+        db.commit()
+
+        logger.info(f"Updated prices for {updated_count} stocks")
+
+        return {
+            "message": "Prices updated successfully",
+            "updated": updated_count,
+            "total_prices": len(prices)
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating prices: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

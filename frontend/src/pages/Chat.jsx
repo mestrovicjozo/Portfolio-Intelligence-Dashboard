@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Send, Bot, User } from 'lucide-react';
+import { Send, Bot, User, Sparkles } from 'lucide-react';
 import { queryApi } from '../services/api';
 import './Chat.css';
 
@@ -12,10 +12,18 @@ function Chat() {
     },
   ]);
   const [input, setInput] = useState('');
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [loadingText, setLoadingText] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const askMutation = useMutation({
-    mutationFn: (question) => queryApi.ask(question),
+    mutationFn: (question) => {
+      setIsLoading(true);
+      return queryApi.ask(question);
+    },
     onSuccess: (response, question) => {
+      setLoadingProgress(100);
+      setIsLoading(false);
       setMessages((prev) => [
         ...prev,
         { role: 'user', content: question },
@@ -28,6 +36,8 @@ function Chat() {
       setInput('');
     },
     onError: (error) => {
+      setLoadingProgress(0);
+      setIsLoading(false);
       setMessages((prev) => [
         ...prev,
         {
@@ -37,6 +47,39 @@ function Chat() {
       ]);
     },
   });
+
+  // Simulate loading progress for better UX
+  useEffect(() => {
+    let interval;
+    if (isLoading) {
+      setLoadingProgress(0);
+      const loadingSteps = [
+        { progress: 20, text: 'Searching through your portfolio news...' },
+        { progress: 40, text: 'Finding relevant information...' },
+        { progress: 60, text: 'Analyzing sentiment and context...' },
+        { progress: 80, text: 'Generating AI response...' },
+        { progress: 95, text: 'Almost done...' },
+      ];
+
+      let stepIndex = 0;
+      setLoadingText(loadingSteps[0].text);
+
+      interval = setInterval(() => {
+        if (stepIndex < loadingSteps.length) {
+          setLoadingProgress(loadingSteps[stepIndex].progress);
+          setLoadingText(loadingSteps[stepIndex].text);
+          stepIndex++;
+        }
+      }, 800);
+    } else {
+      setLoadingProgress(0);
+      setLoadingText('');
+    }
+
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isLoading]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -94,16 +137,23 @@ function Chat() {
                 </div>
               </div>
             ))}
-            {askMutation.isLoading && (
-              <div className="message assistant">
+            {isLoading && (
+              <div className="message assistant loading-message">
                 <div className="message-icon">
-                  <Bot size={20} />
+                  <Sparkles size={20} className="sparkle-animate" />
                 </div>
                 <div className="message-content">
-                  <div className="typing-indicator">
-                    <span></span>
-                    <span></span>
-                    <span></span>
+                  <div className="ai-loading-container">
+                    <p className="loading-text">{loadingText}</p>
+                    <div className="progress-bar-container">
+                      <div
+                        className="progress-bar"
+                        style={{ width: `${loadingProgress}%` }}
+                      ></div>
+                    </div>
+                    <div className="loading-stats">
+                      <span>{loadingProgress}% complete</span>
+                    </div>
                   </div>
                 </div>
               </div>

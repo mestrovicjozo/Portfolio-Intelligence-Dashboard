@@ -98,10 +98,14 @@ function Dashboard() {
   };
 
   const handleFileSelect = (e) => {
+    console.log('File input changed');
     const file = e.target.files[0];
+    console.log('Selected file:', file);
     if (file && file.name.endsWith('.csv')) {
+      console.log('Valid CSV file selected:', file.name);
       setCsvFile(file);
     } else {
+      console.log('Invalid file selected');
       alert('Please select a valid CSV file');
       e.target.value = '';
     }
@@ -109,8 +113,13 @@ function Dashboard() {
 
   const handleImportCSV = (e) => {
     e.preventDefault();
+    console.log('Import CSV button clicked!');
+    console.log('CSV file:', csvFile);
     if (csvFile) {
+      console.log('Starting import mutation...');
       importCSVMutation.mutate(csvFile);
+    } else {
+      console.log('No CSV file selected');
     }
   };
 
@@ -206,12 +215,12 @@ function Dashboard() {
                       <h4>{position.stock.symbol}</h4>
                       <TrendingUp size={20} />
                     </div>
-                    <p className="mover-price">{formatEUR(position.current_price)}</p>
+                    <p className="mover-price">{position.current_value ? formatEUR(position.current_value) : 'N/A'}</p>
                     <p className="text-success">
                       +{position.gain_loss_percent.toFixed(2)}%
                     </p>
                     <p className="mover-shares">
-                      {position.shares} shares @ {formatEUR(position.current_price)} • +{formatEUR(position.gain_loss)}
+                      {position.shares} shares • +{formatEUR(position.gain_loss)}
                     </p>
                   </div>
                 ))}
@@ -229,12 +238,12 @@ function Dashboard() {
                       <h4>{position.stock.symbol}</h4>
                       <TrendingDown size={20} />
                     </div>
-                    <p className="mover-price">{formatEUR(position.current_price)}</p>
+                    <p className="mover-price">{position.current_value ? formatEUR(position.current_value) : 'N/A'}</p>
                     <p className="text-danger">
                       {position.gain_loss_percent.toFixed(2)}%
                     </p>
                     <p className="mover-shares">
-                      {position.shares} shares @ {formatEUR(position.current_price)} • {formatEUR(Math.abs(position.gain_loss))}
+                      {position.shares} shares • {formatEUR(Math.abs(position.gain_loss))}
                     </p>
                   </div>
                 ))}

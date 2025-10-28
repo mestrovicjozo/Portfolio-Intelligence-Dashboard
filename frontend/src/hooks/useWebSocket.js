@@ -27,53 +27,50 @@ export const useWebSocket = (url, options = {}) => {
         ws.current.close();
       }
 
-      ws.current = new WebSocket(url);
-
-      ws.current.onopen = (event) => {
-        console.log('WebSocket connected');
-        setIsConnected(true);
-        reconnectCount.current = 0;
-        if (onOpen) onOpen(event);
-      };
-
-      ws.current.onmessage = (event) => {
+      // Add a small delay before attempting connection to give backend time to start
+      setTimeout(() => {
         try {
-          const data = JSON.parse(event.data);
-          setLastMessage(data);
-          if (onMessage) onMessage(data);
+          ws.current = new WebSocket(url);
+
+          ws.current.onopen = (event) => {
+            // Silently connect - no console spam
+            setIsConnected(true);
+            reconnectCount.current = 0;
+            if (onOpen) onOpen(event);
+          };
+
+          ws.current.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data);
+              setLastMessage(data);
+              if (onMessage) onMessage(data);
+            } catch (error) {
+              console.error('Error parsing WebSocket message:', error);
+            }
+          };
+
+          ws.current.onerror = (error) => {
+            // Silently handle errors - no console spam
+            if (onError) onError(error);
+          };
+
+          ws.current.onclose = (event) => {
+            // Silently handle disconnect - no console spam
+            setIsConnected(false);
+            if (onClose) onClose(event);
+
+            // Attempt to reconnect silently
+            if (reconnectCount.current < reconnectAttempts) {
+              reconnectCount.current += 1;
+              reconnectTimeout.current = setTimeout(connect, reconnectInterval);
+            }
+          };
         } catch (error) {
-          console.error('Error parsing WebSocket message:', error);
+          // Silently fail - WebSocket is optional
         }
-      };
-
-      ws.current.onerror = (error) => {
-        // Only log on first error to reduce console spam
-        if (reconnectCount.current === 0) {
-          console.warn('WebSocket connection failed (will retry silently)');
-        }
-        if (onError) onError(error);
-      };
-
-      ws.current.onclose = (event) => {
-        // Only log disconnect on first attempt
-        if (reconnectCount.current === 0) {
-          console.log('WebSocket disconnected');
-        }
-        setIsConnected(false);
-        if (onClose) onClose(event);
-
-        // Attempt to reconnect
-        if (reconnectCount.current < reconnectAttempts) {
-          reconnectCount.current += 1;
-          // Only log first reconnection attempt
-          if (reconnectCount.current === 1) {
-            console.log('WebSocket: Will retry connection...');
-          }
-          reconnectTimeout.current = setTimeout(connect, reconnectInterval);
-        }
-      };
+      }, 1000);
     } catch (error) {
-      console.error('Error creating WebSocket connection:', error);
+      // Silently fail - WebSocket is optional
     }
   }, [url, onMessage, onOpen, onClose, onError, reconnectInterval, reconnectAttempts]);
 

@@ -29,45 +29,13 @@ class CurrencyConverter:
         # Check if we have a valid cached rate
         if self._cached_rate and self._cache_timestamp:
             if datetime.now() - self._cache_timestamp < self._cache_duration:
-                logger.debug(f"Using cached USD/EUR rate: {self._cached_rate}")
                 return self._cached_rate
 
-        # TEMPORARY: Skip API call and use fallback immediately due to Yahoo Finance issues
-        logger.info("Using fallback EUR/USD rate (Yahoo Finance temporarily disabled)")
+        # Use fallback rate directly (Yahoo Finance API is unreliable)
         fallback = self._get_fallback_rate()
         self._cached_rate = fallback
         self._cache_timestamp = datetime.now()
         return fallback
-
-        # TODO: Re-enable when Yahoo Finance is stable
-        # try:
-        #     # Fetch EUR/USD exchange rate from Yahoo Finance
-        #     eurusd = yf.Ticker("EURUSD=X")
-        #     data = eurusd.history(period="1d")
-        #
-        #     if not data.empty and len(data) > 0:
-        #         # Get the most recent close price (EUR/USD rate)
-        #         rate = float(data['Close'].iloc[-1])
-        #
-        #         # Cache the rate
-        #         self._cached_rate = rate
-        #         self._cache_timestamp = datetime.now()
-        #
-        #         logger.info(f"Fetched fresh USD/EUR exchange rate: {rate}")
-        #         return rate
-        #     else:
-        #         logger.warning("No exchange rate data returned, using fallback rate")
-        #         fallback = self._get_fallback_rate()
-        #         self._cached_rate = fallback
-        #         self._cache_timestamp = datetime.now()
-        #         return fallback
-        #
-        # except Exception as e:
-        #     logger.warning(f"Error fetching USD/EUR rate (using fallback): {e}")
-        #     fallback = self._get_fallback_rate()
-        #     self._cached_rate = fallback
-        #     self._cache_timestamp = datetime.now()
-        #     return fallback
 
     def _get_fallback_rate(self) -> float:
         """

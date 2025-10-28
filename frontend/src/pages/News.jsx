@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, ExternalLink, Filter, Info, Sparkles } from 'lucide-react';
+import { RefreshCw, ExternalLink, Filter, Info, Sparkles, ChevronDown } from 'lucide-react';
 import { newsApi, positionsApi } from '../services/api';
 import { formatDistanceToNow } from 'date-fns';
 import { useToast } from '../components/Toast/ToastProvider';
@@ -12,7 +12,7 @@ function News() {
   const [sortBy, setSortBy] = useState('latest'); // latest, oldest, highest-sentiment, lowest-sentiment
   const [filterStock, setFilterStock] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
-  const [showSentimentDemo, setShowSentimentDemo] = useState(true);
+  const [showSentimentDemo, setShowSentimentDemo] = useState(false); // Start collapsed
 
   const { data: news, isLoading } = useQuery({
     queryKey: ['news'],
@@ -126,26 +126,29 @@ function News() {
           </div>
         </div>
 
-        {showSentimentDemo && (
-          <div className="sentiment-demo card">
-            <div className="sentiment-demo-header">
-              <div className="sentiment-demo-title">
-                <Sparkles size={20} className="sparkle-icon" />
-                <h3>How Our Sentiment Analysis Works</h3>
-              </div>
-              <button
-                className="demo-close-btn"
-                onClick={() => setShowSentimentDemo(false)}
-                aria-label="Close demo"
-              >
-                ×
-              </button>
+        <div className="sentiment-demo card">
+          <button
+            className="sentiment-demo-toggle"
+            onClick={() => setShowSentimentDemo(!showSentimentDemo)}
+            aria-expanded={showSentimentDemo}
+          >
+            <div className="sentiment-demo-title">
+              <Sparkles size={20} className="sparkle-icon" />
+              <h3>How Our Sentiment Analysis Works</h3>
             </div>
-            <p className="sentiment-demo-intro">
-              We use Google's Gemini AI to analyze financial news sentiment. Here's how it evaluates different types of news:
-            </p>
+            <ChevronDown
+              size={20}
+              className={`chevron-icon ${showSentimentDemo ? 'expanded' : ''}`}
+            />
+          </button>
 
-            <div className="sentiment-examples">
+          {showSentimentDemo && (
+            <div className="sentiment-demo-content">
+              <p className="sentiment-demo-intro">
+                We use Google's Gemini AI to analyze financial news sentiment. Here's how it evaluates different types of news:
+              </p>
+
+              <div className="sentiment-examples">
               <div className="sentiment-example">
                 <div className="example-header">
                   <Info size={16} />
@@ -183,17 +186,18 @@ function News() {
               </div>
             </div>
 
-            <div className="sentiment-factors">
-              <h4>Key Factors We Analyze:</h4>
-              <ul>
-                <li><strong>Market Impact:</strong> How will this affect the stock price?</li>
-                <li><strong>Investor Confidence:</strong> Will this attract or repel investors?</li>
-                <li><strong>Company Fundamentals:</strong> Does this strengthen or weaken the business?</li>
-                <li><strong>Risk Factors:</strong> Are there hidden concerns or opportunities?</li>
-              </ul>
+              <div className="sentiment-factors">
+                <h4>Key Factors We Analyze:</h4>
+                <ul>
+                  <li><strong>Market Impact:</strong> How will this affect the stock price?</li>
+                  <li><strong>Investor Confidence:</strong> Will this attract or repel investors?</li>
+                  <li><strong>Company Fundamentals:</strong> Does this strengthen or weaken the business?</li>
+                  <li><strong>Risk Factors:</strong> Are there hidden concerns or opportunities?</li>
+                </ul>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
 
         {showFilters && (
           <div className="news-filters card">
