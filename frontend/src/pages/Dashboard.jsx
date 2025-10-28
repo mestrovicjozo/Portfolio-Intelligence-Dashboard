@@ -1,11 +1,13 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Plus, TrendingUp, TrendingDown, X, MoreVertical, Upload } from 'lucide-react';
+import { Plus, TrendingUp, TrendingDown, X, MoreVertical, Upload, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { positionsApi, portfoliosApi, stocksApi } from '../services/api';
 import StockActionsModal from '../components/StockActionsModal';
 import AnimatedContainer from '../components/AnimatedContainer';
+import { DashboardSkeleton, PositionCardSkeleton, StatsCardSkeleton } from '../components/SkeletonLoader';
+import { useToast } from '../components/Toast/ToastProvider';
 import * as animations from '../utils/animations';
 import { formatEUR } from '../utils/currency';
 import './Dashboard.css';
@@ -21,35 +23,64 @@ function Dashboard() {
   const [expandedPosition, setExpandedPosition] = useState(null);
   const fileInputRef = useRef(null);
   const queryClient = useQueryClient();
+  const toast = useToast();
 
   // Fetch default portfolio
-  const { data: portfolio } = useQuery({
+  const { data: portfolio, isLoading: portfolioLoading, isError: portfolioError, error: portfolioErrorData } = useQuery({
     queryKey: ['portfolio'],
     queryFn: async () => {
       const response = await portfoliosApi.getDefault();
       return response.data;
     },
+    retry: 2,
+    onError: (error) => {
+      toast.error(
+        'Failed to Load Portfolio',
+        error.response?.data?.detail || 'Could not fetch portfolio data. Please try again.',
+        6000
+      );
+    },
   });
 
   // Fetch positions for active portfolio
-  const { data: positions = [], isLoading: positionsLoading } = useQuery({
+  const { data: positions = [], isLoading: positionsLoading, isError: positionsError, error: positionsErrorData } = useQuery({
     queryKey: ['positions'],
     queryFn: async () => {
       const response = await positionsApi.getAll();
       return response.data;
+    },
+    retry: 2,
+    onError: (error) => {
+      toast.error(
+        'Failed to Load Positions',
+        error.response?.data?.detail || 'Could not fetch positions. Please refresh the page.',
+        6000
+      );
     },
   });
 
   // Add position mutation
   const addPositionMutation = useMutation({
     mutationFn: (positionData) => positionsApi.create(positionData),
-    onSuccess: () => {
+    onSuccess: (response) => {
       queryClient.invalidateQueries(['positions']);
       queryClient.invalidateQueries(['portfolio']);
       setNewSymbol('');
       setNewShares('');
       setNewCost('');
       setShowAddPosition(false);
+      toast.success(
+        'Position Added',
+        `Successfully added ${response.data.stock.symbol} to your portfolio`,
+        4000
+      );
+    },
+    onError: (error) => {
+      toast.error(
+        'Failed to Add Position',
+        error.response?.data?.detail || 'Could not add position. Please check the stock symbol and try again.',
+        6000
+      );
     },
   });
 
@@ -59,6 +90,18 @@ function Dashboard() {
     onSuccess: () => {
       queryClient.invalidateQueries(['positions']);
       queryClient.invalidateQueries(['portfolio']);
+      toast.success(
+        'Position Deleted',
+        'Position removed from your portfolio',
+        3000
+      );
+    },
+    onError: (error) => {
+      toast.error(
+        'Failed to Delete Position',
+        error.response?.data?.detail || 'Could not delete position. Please try again.',
+        5000
+      );
     },
   });
 
@@ -74,14 +117,30 @@ function Dashboard() {
         fileInputRef.current.value = '';
       }
 
-      // Show summary
+      // Show summary with toast
       const data = response.data;
-      alert(
-        `CSV Import Complete!\n\n` +
-        `Created: ${data.created} positions\n` +
-        `Updated: ${data.updated} positions\n` +
-        `Skipped: ${data.skipped} rows\n` +
-        (data.errors && data.errors.length > 0 ? `\nErrors:\n${data.errors.join('\n')}` : '')
+      const summary = `Created: ${data.created}, Updated: ${data.updated}, Skipped: ${data.skipped}`;
+
+      if (data.errors && data.errors.length > 0) {
+        toast.warning(
+          'CSV Import Completed with Errors',
+          `${summary}. Some rows had errors - check console for details.`,
+          8000
+        );
+        console.error('CSV Import Errors:', data.errors);
+      } else {
+        toast.success(
+          'CSV Import Successful',
+          summary,
+          5000
+        );
+      }
+    },
+    onError: (error) => {
+      toast.error(
+        'CSV Import Failed',
+        error.response?.data?.detail || 'Failed to import CSV. Please check the file format and try again.',
+        7000
       );
     },
   });
@@ -98,28 +157,19 @@ function Dashboard() {
   };
 
   const handleFileSelect = (e) => {
-    console.log('File input changed');
     const file = e.target.files[0];
-    console.log('Selected file:', file);
     if (file && file.name.endsWith('.csv')) {
-      console.log('Valid CSV file selected:', file.name);
       setCsvFile(file);
     } else {
-      console.log('Invalid file selected');
-      alert('Please select a valid CSV file');
+      toast.error('Invalid File', 'Please select a valid CSV file', 3000);
       e.target.value = '';
     }
   };
 
   const handleImportCSV = (e) => {
     e.preventDefault();
-    console.log('Import CSV button clicked!');
-    console.log('CSV file:', csvFile);
     if (csvFile) {
-      console.log('Starting import mutation...');
       importCSVMutation.mutate(csvFile);
-    } else {
-      console.log('No CSV file selected');
     }
   };
 
@@ -135,8 +185,41 @@ function Dashboard() {
     .sort((a, b) => a.gain_loss_percent - b.gain_loss_percent)
     .slice(0, 3);
 
-  if (positionsLoading) {
-    return <div className="loading"><div className="spinner"></div></div>;
+  // Show skeleton loader while loading
+  if (positionsLoading || portfolioLoading) {
+    return <DashboardSkeleton />;
+  }
+
+  // Show error state if critical data failed to load
+  if (positionsError || portfolioError) {
+    return (
+      <div className="dashboard">
+        <div className="container">
+          <div className="error-state card" style={{
+            textAlign: 'center',
+            padding: '3rem',
+            marginTop: '2rem'
+          }}>
+            <AlertCircle size={48} style={{ color: '#ef4444', margin: '0 auto 1rem' }} />
+            <h2>Failed to Load Dashboard</h2>
+            <p style={{ color: '#6b7280', marginBottom: '1.5rem' }}>
+              {positionsErrorData?.response?.data?.detail ||
+               portfolioErrorData?.response?.data?.detail ||
+               'Could not load your portfolio data. Please check your connection and try again.'}
+            </p>
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                queryClient.invalidateQueries(['positions']);
+                queryClient.invalidateQueries(['portfolio']);
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -150,20 +233,14 @@ function Dashboard() {
           <div className="dashboard-actions">
             <button
               className="btn btn-secondary"
-              onClick={() => {
-                console.log('Import CSV button clicked!');
-                setShowImportCSV(true);
-              }}
+              onClick={() => setShowImportCSV(true)}
             >
               <Upload size={20} />
               Import CSV
             </button>
             <button
               className="btn btn-primary"
-              onClick={() => {
-                console.log('Add Position button clicked!');
-                setShowAddPosition(true);
-              }}
+              onClick={() => setShowAddPosition(true)}
             >
               <Plus size={20} />
               Add Position
@@ -366,9 +443,10 @@ function Dashboard() {
                                 deletePositionMutation.mutate(position.id);
                               }
                             }}
+                            disabled={deletePositionMutation.isPending}
                           >
                             <X size={16} />
-                            Delete
+                            {deletePositionMutation.isPending ? 'Deleting...' : 'Delete'}
                           </button>
                         </div>
                       </div>
@@ -450,8 +528,8 @@ function Dashboard() {
                     <button type="button" className="btn btn-secondary" onClick={() => setShowAddPosition(false)}>
                       Cancel
                     </button>
-                    <button type="submit" className="btn btn-primary" disabled={addPositionMutation.isLoading}>
-                      {addPositionMutation.isLoading ? 'Adding...' : 'Add Position'}
+                    <button type="submit" className="btn btn-primary" disabled={addPositionMutation.isPending}>
+                      {addPositionMutation.isPending ? 'Adding...' : 'Add Position'}
                     </button>
                   </div>
                 </form>
@@ -513,13 +591,13 @@ function Dashboard() {
                     <button
                       type="submit"
                       className="btn btn-primary"
-                      disabled={!csvFile || importCSVMutation.isLoading}
+                      disabled={!csvFile || importCSVMutation.isPending}
                     >
-                      {importCSVMutation.isLoading ? 'Importing...' : 'Import Positions'}
+                      {importCSVMutation.isPending ? 'Importing...' : 'Import Positions'}
                     </button>
                   </div>
                 </form>
-                {importCSVMutation.isLoading && (
+                {importCSVMutation.isPending && (
                   <div className="import-progress">
                     <div className="progress-header">
                       <p>Importing positions...</p>

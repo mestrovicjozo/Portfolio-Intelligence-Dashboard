@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, ExternalLink, Filter, Info, Sparkles, ChevronDown } from 'lucide-react';
+import { RefreshCw, ExternalLink, Filter, Info, Sparkles, ChevronDown, AlertCircle } from 'lucide-react';
 import { newsApi, positionsApi } from '../services/api';
 import { formatDistanceToNow } from 'date-fns';
 import { useToast } from '../components/Toast/ToastProvider';
+import { NewsPageSkeleton, NewsCardSkeleton } from '../components/SkeletonLoader';
 import './News.css';
 
 function News() {
@@ -14,11 +15,20 @@ function News() {
   const [showFilters, setShowFilters] = useState(false);
   const [showSentimentDemo, setShowSentimentDemo] = useState(false); // Start collapsed
 
-  const { data: news, isLoading } = useQuery({
+  const { data: news, isLoading, isError, error } = useQuery({
     queryKey: ['news'],
     queryFn: async () => {
       const response = await newsApi.getAll({ limit: 100 });
       return response.data;
+    },
+    retry: 2,
+    staleTime: 1000 * 60 * 5, // Consider data fresh for 5 minutes
+    onError: (error) => {
+      toast.error(
+        'Failed to Load News',
+        error.response?.data?.detail || 'Could not fetch news articles. Please try again.',
+        6000
+      );
     },
   });
 
@@ -95,8 +105,36 @@ function News() {
     return positions.map(p => p.stock.symbol).sort();
   }, [positions]);
 
+  // Show skeleton while loading
   if (isLoading) {
-    return <div className="loading"><div className="spinner"></div></div>;
+    return <NewsPageSkeleton />;
+  }
+
+  // Show error state
+  if (isError) {
+    return (
+      <div className="news-page">
+        <div className="container">
+          <div className="error-state card" style={{
+            textAlign: 'center',
+            padding: '3rem',
+            marginTop: '2rem'
+          }}>
+            <AlertCircle size={48} style={{ color: '#ef4444', margin: '0 auto 1rem' }} />
+            <h2>Failed to Load News</h2>
+            <p style={{ color: '#6b7280', marginBottom: '1.5rem' }}>
+              {error?.response?.data?.detail || 'Could not load news articles. Please check your connection and try again.'}
+            </p>
+            <button
+              className="btn btn-primary"
+              onClick={() => queryClient.invalidateQueries(['news'])}
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -117,11 +155,14 @@ function News() {
             </button>
             <button
               className="btn btn-primary"
-              onClick={() => refreshMutation.mutate()}
-              disabled={refreshMutation.isLoading}
+              onClick={() => {
+                console.log('Refresh button clicked, isPending:', refreshMutation.isPending);
+                refreshMutation.mutate();
+              }}
+              disabled={refreshMutation.isPending}
             >
-              <RefreshCw size={20} className={refreshMutation.isLoading ? 'spinning' : ''} />
-              {refreshMutation.isLoading ? 'Refreshing...' : 'Refresh News'}
+              <RefreshCw size={20} className={refreshMutation.isPending ? 'spinning' : ''} />
+              {refreshMutation.isPending ? 'Refreshing...' : 'Refresh News'}
             </button>
           </div>
         </div>

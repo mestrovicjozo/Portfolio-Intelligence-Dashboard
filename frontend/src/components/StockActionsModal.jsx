@@ -10,13 +10,16 @@ import {
   Loader,
   ExternalLink,
   BarChart3,
+  AlertCircle,
 } from 'lucide-react';
 import PriceChart from './PriceChart';
+import { useToast } from './Toast/ToastProvider';
 import './StockActionsModal.css';
 
 const StockActionsModal = ({ symbol, stockName, onClose }) => {
   const [selectedAction, setSelectedAction] = useState(null);
   const [question, setQuestion] = useState('');
+  const toast = useToast();
 
   // Fetch available actions
   const { data: actions = [] } = useQuery({
@@ -28,18 +31,33 @@ const StockActionsModal = ({ symbol, stockName, onClose }) => {
   });
 
   // Fetch articles
-  const { data: articles = [], isLoading: loadingArticles } = useQuery({
+  const { data: articles = [], isLoading: loadingArticles, isError: articlesError } = useQuery({
     queryKey: ['stock-articles', symbol],
     queryFn: async () => {
       const response = await stocksApi.getArticles(symbol, 5);
       return response.data;
     },
     enabled: selectedAction === 'view_articles',
+    retry: 1,
   });
 
   // Get insights mutation
   const insightsMutation = useMutation({
     mutationFn: () => stocksApi.getInsights(symbol),
+    onSuccess: () => {
+      toast.success(
+        'Insights Generated',
+        `AI insights for ${symbol} have been generated`,
+        4000
+      );
+    },
+    onError: (error) => {
+      toast.error(
+        'Failed to Generate Insights',
+        error.response?.data?.detail || 'Could not generate AI insights. Please try again.',
+        6000
+      );
+    },
   });
 
   // Ask question mutation
@@ -48,6 +66,13 @@ const StockActionsModal = ({ symbol, stockName, onClose }) => {
     onSuccess: () => {
       // Clear the question input after successful submission
       setQuestion('');
+    },
+    onError: (error) => {
+      toast.error(
+        'Failed to Get Answer',
+        error.response?.data?.detail || 'Could not process your question. Please try again.',
+        6000
+      );
     },
   });
 
@@ -135,6 +160,11 @@ const StockActionsModal = ({ symbol, stockName, onClose }) => {
                       <Loader className="spinner" />
                       <p>Loading articles...</p>
                     </div>
+                  ) : articlesError ? (
+                    <div className="error-state" style={{ textAlign: 'center', padding: '2rem' }}>
+                      <AlertCircle size={40} style={{ color: '#ef4444', margin: '0 auto 1rem' }} />
+                      <p>Failed to load articles. Please try again.</p>
+                    </div>
                   ) : articles.length === 0 ? (
                     <div className="empty-state">
                       <p>No articles found. Try refreshing the news feed.</p>
@@ -172,7 +202,7 @@ const StockActionsModal = ({ symbol, stockName, onClose }) => {
               {selectedAction === 'get_insights' && (
                 <div className="insights-view">
                   <h3>AI-Generated Insights</h3>
-                  {insightsMutation.isLoading ? (
+                  {insightsMutation.isPending ? (
                     <div className="loading-state">
                       <Loader className="spinner" />
                       <p>Generating insights...</p>
@@ -226,13 +256,13 @@ const StockActionsModal = ({ symbol, stockName, onClose }) => {
                     <button
                       type="submit"
                       className="btn-primary"
-                      disabled={!question.trim() || askMutation.isLoading}
+                      disabled={!question.trim() || askMutation.isPending}
                     >
-                      {askMutation.isLoading ? 'Asking...' : 'Ask Question'}
+                      {askMutation.isPending ? 'Asking...' : 'Ask Question'}
                     </button>
                   </form>
 
-                  {askMutation.isLoading && (
+                  {askMutation.isPending && (
                     <div className="loading-state">
                       <Loader className="spinner" />
                       <p>Thinking...</p>

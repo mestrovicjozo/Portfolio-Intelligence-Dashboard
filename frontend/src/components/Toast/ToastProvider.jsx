@@ -32,11 +32,12 @@ const TOAST_TYPES = {
   },
 };
 
-const Toast = ({ id, type, title, message, onClose }) => {
+const Toast = React.forwardRef(({ id, type, title, message, onClose }, ref) => {
   const { icon: Icon, className } = TOAST_TYPES[type] || TOAST_TYPES.info;
 
   return (
     <motion.div
+      ref={ref}
       layout
       initial={{ opacity: 0, y: -50, scale: 0.3 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -56,7 +57,7 @@ const Toast = ({ id, type, title, message, onClose }) => {
       </button>
     </motion.div>
   );
-};
+});
 
 export const ToastProvider = ({ children }) => {
   const [toasts, setToasts] = useState([]);

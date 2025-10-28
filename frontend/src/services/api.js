@@ -7,7 +7,80 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  timeout: 180000, // 3 minute timeout (news refresh can take 1-2 minutes)
 });
+
+// Request interceptor for logging and debugging
+api.interceptors.request.use(
+  (config) => {
+    // Silent in production and development (removed console spam)
+    return config;
+  },
+  (error) => {
+    // Only log critical errors
+    if (error.code === 'ECONNABORTED' || !error.response) {
+      console.error('[API Request Error]', error.message);
+    }
+    return Promise.reject(error);
+  }
+);
+
+// Response interceptor for error handling
+api.interceptors.response.use(
+  (response) => {
+    // Silent success responses (removed console spam)
+    return response;
+  },
+  (error) => {
+    // Enhanced error handling
+    if (error.response) {
+      // Server responded with error status
+      const { status, data } = error.response;
+
+      // Only log actual errors (not successful responses)
+      if (status >= 400) {
+        console.error(`[API Error] ${status}:`, data?.detail || data?.message || 'Request failed');
+      }
+
+      // Add user-friendly error messages
+      switch (status) {
+        case 400:
+          error.message = 'Invalid request. Please check your input.';
+          break;
+        case 401:
+          error.message = 'Authentication required. Please log in.';
+          break;
+        case 403:
+          error.message = 'You do not have permission to perform this action.';
+          break;
+        case 404:
+          error.message = 'The requested resource was not found.';
+          break;
+        case 429:
+          error.message = 'Too many requests. Please try again later.';
+          break;
+        case 500:
+          error.message = 'Server error. Please try again later.';
+          break;
+        case 503:
+          error.message = 'Service temporarily unavailable. Please try again later.';
+          break;
+        default:
+          error.message = data?.detail || 'An unexpected error occurred.';
+      }
+    } else if (error.request) {
+      // Request made but no response received
+      console.error('[API Error] No response received - check connection');
+      error.message = 'Unable to reach the server. Please check your connection.';
+    } else {
+      // Error in request setup
+      console.error('[API Error]', error.message);
+      error.message = 'Failed to send request. Please try again.';
+    }
+
+    return Promise.reject(error);
+  }
+);
 
 // Portfolios API
 export const portfoliosApi = {
@@ -64,7 +137,7 @@ export const stocksApi = {
 export const newsApi = {
   getAll: (params) => api.get('/news/', { params }),
   getOne: (articleId) => api.get(`/news/${articleId}/`),
-  refresh: () => api.post('/news/refresh/'),
+  refresh: () => api.post('/news/refresh', {}, { timeout: 120000 }), // 2 minutes for news refresh (no trailing slash)
   analyzeSentiment: (articleId) => api.post(`/news/${articleId}/analyze-sentiment/`),
 };
 

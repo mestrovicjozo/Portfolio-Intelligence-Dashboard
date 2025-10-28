@@ -88,9 +88,8 @@ export const useWebSocket = (url, options = {}) => {
   const sendMessage = useCallback((data) => {
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
       ws.current.send(typeof data === 'string' ? data : JSON.stringify(data));
-    } else {
-      console.warn('WebSocket is not connected');
     }
+    // Silent fail - WebSocket not connected
   }, []);
 
   useEffect(() => {

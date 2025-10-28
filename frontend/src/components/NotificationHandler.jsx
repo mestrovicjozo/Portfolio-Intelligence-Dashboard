@@ -13,8 +13,6 @@ const NotificationHandler = () => {
   const toast = useToast();
 
   const handleMessage = (data) => {
-    console.log('WebSocket message received:', data);
-
     if (data.type === 'job_update') {
       handleJobUpdate(data);
     }
@@ -65,22 +63,8 @@ const NotificationHandler = () => {
 
   const { isConnected } = useWebSocket(WS_URL, {
     onMessage: handleMessage,
-    onOpen: () => {
-      console.log('Connected to notification service');
-    },
-    onClose: () => {
-      console.log('Disconnected from notification service');
-    },
-    onError: (error) => {
-      console.error('WebSocket error:', error);
-    },
+    // Silent - WebSocket reconnects automatically
   });
-
-  useEffect(() => {
-    if (isConnected) {
-      console.log('Notification handler active');
-    }
-  }, [isConnected]);
 
   // This component doesn't render anything
   return null;

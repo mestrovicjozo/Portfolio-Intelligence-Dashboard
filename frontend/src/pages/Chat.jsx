@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { Send, Bot, User, Sparkles } from 'lucide-react';
+import { Send, Bot, User, Sparkles, AlertCircle } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { queryApi } from '../services/api';
+import { useToast } from '../components/Toast/ToastProvider';
 import './Chat.css';
 
 function Chat() {
@@ -15,6 +17,7 @@ function Chat() {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingText, setLoadingText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const toast = useToast();
 
   const askMutation = useMutation({
     mutationFn: (question) => {
@@ -38,13 +41,23 @@ function Chat() {
     onError: (error) => {
       setLoadingProgress(0);
       setIsLoading(false);
+
+      const errorMessage = error.response?.data?.detail || error.message || 'An unexpected error occurred';
+
       setMessages((prev) => [
         ...prev,
         {
           role: 'assistant',
-          content: `Sorry, I encountered an error: ${error.message}`,
+          content: `Sorry, I encountered an error: ${errorMessage}`,
+          isError: true,
         },
       ]);
+
+      toast.error(
+        'AI Assistant Error',
+        errorMessage,
+        5000
+      );
     },
   });
 
@@ -83,7 +96,7 @@ function Chat() {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (input.trim() && !askMutation.isLoading) {
+    if (input.trim() && !askMutation.isPending) {
       askMutation.mutate(input);
     }
   };
@@ -109,12 +122,22 @@ function Chat() {
         <div className="chat-container card">
           <div className="messages">
             {messages.map((message, index) => (
-              <div key={index} className={`message ${message.role}`}>
+              <div key={index} className={`message ${message.role} ${message.isError ? 'error' : ''}`}>
                 <div className="message-icon">
-                  {message.role === 'user' ? <User size={20} /> : <Bot size={20} />}
+                  {message.role === 'user' ? (
+                    <User size={20} />
+                  ) : message.isError ? (
+                    <AlertCircle size={20} />
+                  ) : (
+                    <Bot size={20} />
+                  )}
                 </div>
                 <div className="message-content">
-                  <p>{message.content}</p>
+                  {message.role === 'assistant' ? (
+                    <ReactMarkdown>{message.content}</ReactMarkdown>
+                  ) : (
+                    <p>{message.content}</p>
+                  )}
                   {message.sources && message.sources.length > 0 && (
                     <div className="sources">
                       <p className="sources-label">Sources:</p>
@@ -184,12 +207,12 @@ function Chat() {
               placeholder="Ask a question about your portfolio..."
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              disabled={askMutation.isLoading}
+              disabled={askMutation.isPending}
             />
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={!input.trim() || askMutation.isLoading}
+              disabled={!input.trim() || askMutation.isPending}
             >
               <Send size={20} />
             </button>
