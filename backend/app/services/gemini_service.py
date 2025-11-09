@@ -187,11 +187,9 @@ Response:"""
 
         Returns:
             Generated answer string
-        """
-        # Check if question is finance-related
-        if not self.is_finance_related(question):
-            return "I'm sorry, but I can only answer questions related to finance, stocks, investing, and your portfolio. Please ask a question about financial markets, companies, or your investments."
 
+        Note: Finance-related validation should be done before calling this method
+        """
         # Build context string from articles
         context_str = ""
         for idx, item in enumerate(context, 1):

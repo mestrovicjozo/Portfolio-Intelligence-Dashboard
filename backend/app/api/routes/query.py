@@ -27,6 +27,13 @@ def ask_question(query: QueryRequest, db: Session = Depends(get_db)):
     4. Use Gemini to generate an answer based on the context
     """
     try:
+        # Check if question is finance-related first
+        if not gemini_service.is_finance_related(query.question):
+            return QueryResponse(
+                answer="I'm sorry, but I can only answer questions related to finance, stocks, investing, and your portfolio. Please ask a question about financial markets, companies, or your investments.",
+                sources=[]
+            )
+
         # Generate query embedding
         query_embedding = gemini_service.generate_query_embedding(query.question)
 
@@ -60,7 +67,7 @@ def ask_question(query: QueryRequest, db: Session = Depends(get_db)):
                 "url": article.url
             })
 
-        # Generate answer using Gemini
+        # Generate answer using Gemini (with context)
         answer = gemini_service.answer_question(
             question=query.question,
             context=context
