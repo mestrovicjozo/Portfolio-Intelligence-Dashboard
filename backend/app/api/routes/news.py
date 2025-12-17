@@ -66,20 +66,36 @@ async def refresh_news(background_tasks: BackgroundTasks, db: Session = Depends(
         updated_count = 0
         skipped_count = 0
 
-        # Fetch ALL articles from ActuallyFreeAPI (no ticker filter)
+        # Fetch recent articles from ActuallyFreeAPI from last 30 days
+        start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
         articles = await news_collector.fetch_from_actually_free_api(
             ticker=None,  # Get all articles
-            limit=100  # Max per page
+            limit=100,  # Max per page
+            start_date=start_date  # Only get articles from last 30 days
         )
 
         for item in articles:
             try:
-                # Extract tickers from article
-                article_tickers = item.get("tickers", [])
+                # Extract tickers from article (handle None case)
+                article_tickers = item.get("tickers") or []
 
                 # Find which tickers are in our portfolio
-                relevant_tickers = [t.upper() for t in article_tickers if t.upper() in portfolio_tickers]
+                relevant_tickers = []
+                if article_tickers:
+                    relevant_tickers = [t.upper() for t in article_tickers if t.upper() in portfolio_tickers]
 
+                # If no tickers specified, check if title/summary mentions our stocks
+                if not relevant_tickers:
+                    title = item.get("title", "").upper()
+                    summary = item.get("summary", "").upper()
+
+                    # Check if any of our stock symbols appear in title or summary
+                    for ticker in portfolio_tickers:
+                        if ticker in title or ticker in summary:
+                            relevant_tickers.append(ticker)
+                            break
+
+                # Skip only if no relevance found
                 if not relevant_tickers:
                     skipped_count += 1
                     continue

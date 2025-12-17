@@ -549,6 +549,12 @@ async def import_positions_from_csv(
                     continue
 
                 symbol = row.get('Slice', '').strip().upper()
+
+                # Skip Babcock International (BAB)
+                if symbol == 'BAB':
+                    logger.info(f"Skipping Babcock International (BAB) at line {row_num}")
+                    skipped_count += 1
+                    continue
                 if not symbol:
                     skipped_count += 1
                     logger.debug(f"Row {row_num}: Empty symbol, skipping")

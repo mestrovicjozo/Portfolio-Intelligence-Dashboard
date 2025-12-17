@@ -115,13 +115,28 @@ class NewsCollectorService:
             # Normalize article format
             normalized_articles = []
             for article in all_articles:
+                # Parse publication date safely
+                pub_date = article.get("pub_date")
+                published_at = None
+                if pub_date:
+                    try:
+                        published_at = datetime.fromisoformat(pub_date.replace("Z", "+00:00"))
+                    except (ValueError, AttributeError) as e:
+                        logger.warning(f"Invalid date format for article: {pub_date}")
+
+                # Parse summary safely
+                summary = article.get("description")
+                if not summary:
+                    content = article.get("content") or ""
+                    summary = content[:500] if content else ""
+
                 normalized_articles.append({
                     "title": article.get("title"),
                     "url": article.get("link"),
-                    "published_at": datetime.fromisoformat(article.get("pub_date").replace("Z", "+00:00")) if article.get("pub_date") else None,
+                    "published_at": published_at,
                     "source": article.get("source"),
-                    "summary": article.get("description") or article.get("content", "")[:500],
-                    "tickers": article.get("tickers", []),
+                    "summary": summary,
+                    "tickers": article.get("tickers") or [],
                     "raw_content": article.get("content")
                 })
 
