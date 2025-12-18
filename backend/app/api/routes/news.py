@@ -108,23 +108,17 @@ async def refresh_news(background_tasks: BackgroundTasks, db: Session = Depends(
                 if existing:
                     continue
 
-                # Use Gemini to analyze sentiment from title
+                # Use Gemini to analyze sentiment from title and summary
                 sentiment_score = 0.0  # Default neutral
                 title = item.get("title", "")
+                summary = item.get("summary", "")
 
                 if title:
                     try:
                         # Analyze sentiment using Gemini
-                        sentiment_prompt = f"Analyze the sentiment of this stock news headline and return ONLY a number between -1.0 (very negative) and 1.0 (very positive). Headline: {title}"
-                        sentiment_response = gemini_service.generate_text(sentiment_prompt)
-
-                        # Extract number from response
-                        try:
-                            sentiment_score = float(sentiment_response.strip())
-                            # Clamp to -1.0 to 1.0 range
-                            sentiment_score = max(-1.0, min(1.0, sentiment_score))
-                        except:
-                            sentiment_score = 0.0
+                        content = f"{title}. {summary}" if summary else title
+                        sentiment_result = gemini_service.analyze_sentiment(content)
+                        sentiment_score = sentiment_result["score"]
                     except Exception as e:
                         print(f"Error analyzing sentiment: {e}")
                         sentiment_score = 0.0
