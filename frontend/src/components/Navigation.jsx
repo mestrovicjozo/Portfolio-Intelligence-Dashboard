@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Newspaper, MessageSquare, TrendingUp } from 'lucide-react';
+import { LayoutDashboard, Newspaper, MessageSquare, TrendingUp, Bot } from 'lucide-react';
 import './Navigation.css';
 
 function Navigation() {
@@ -8,6 +8,7 @@ function Navigation() {
   const navItems = [
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/news', label: 'News', icon: Newspaper },
+    { path: '/roboadvisor', label: 'Roboadvisor', icon: Bot },
     { path: '/chat', label: 'Ask AI', icon: MessageSquare },
   ];
 

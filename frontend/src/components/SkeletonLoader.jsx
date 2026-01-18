@@ -150,4 +150,93 @@ export const NewsPageSkeleton = () => (
   </div>
 );
 
+// Skeleton for signal card
+export const SignalCardSkeleton = () => (
+  <div className="card skeleton-signal">
+    <div className="skeleton-signal-header">
+      <div className="skeleton-info">
+        <Skeleton width="80px" height="24px" />
+        <Skeleton width="60px" height="16px" />
+      </div>
+      <Skeleton width="70px" height="28px" className="skeleton-badge" />
+    </div>
+    <div className="skeleton-metrics">
+      <Skeleton width="100%" height="12px" />
+      <Skeleton width="80px" height="24px" />
+    </div>
+    <Skeleton width="100px" height="16px" />
+  </div>
+);
+
+// Full page skeleton for roboadvisor
+export const RoboadvisorSkeleton = () => (
+  <div className="roboadvisor-page">
+    <div className="container">
+      <div className="roboadvisor-header" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+            <Skeleton width="28px" height="28px" className="skeleton-circle" />
+            <Skeleton width="160px" height="32px" />
+          </div>
+          <Skeleton width="280px" height="20px" />
+        </div>
+        <Skeleton width="140px" height="40px" />
+      </div>
+
+      {/* Tabs skeleton */}
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', paddingBottom: '1rem', borderBottom: '1px solid #e5e7eb' }}>
+        <Skeleton width="100px" height="40px" />
+        <Skeleton width="140px" height="40px" />
+        <Skeleton width="120px" height="40px" />
+      </div>
+
+      {/* Risk card skeleton */}
+      <div className="card" style={{ marginBottom: '1.5rem' }}>
+        <Skeleton width="200px" height="24px" style={{ marginBottom: '1rem' }} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2rem', alignItems: 'center' }}>
+          <Skeleton width="160px" height="100px" />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
+            <div>
+              <Skeleton width="80px" height="14px" />
+              <Skeleton width="60px" height="24px" />
+            </div>
+            <div>
+              <Skeleton width="80px" height="14px" />
+              <Skeleton width="60px" height="24px" />
+            </div>
+            <div>
+              <Skeleton width="80px" height="14px" />
+              <Skeleton width="60px" height="24px" />
+            </div>
+            <div>
+              <Skeleton width="80px" height="14px" />
+              <Skeleton width="60px" height="24px" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Stock risks skeleton */}
+      <div className="card">
+        <Skeleton width="180px" height="24px" style={{ marginBottom: '1rem' }} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          {[1, 2, 3].map((i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem', background: '#f9fafb', borderRadius: '6px' }}>
+              <div style={{ display: 'flex', gap: '0.75rem' }}>
+                <Skeleton width="60px" height="20px" />
+                <Skeleton width="120px" height="20px" />
+              </div>
+              <div style={{ display: 'flex', gap: '1rem' }}>
+                <Skeleton width="80px" height="24px" />
+                <Skeleton width="60px" height="20px" />
+                <Skeleton width="60px" height="20px" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
 export default Skeleton;

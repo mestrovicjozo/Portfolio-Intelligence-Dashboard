@@ -137,7 +137,8 @@ export const stocksApi = {
 export const newsApi = {
   getAll: (params) => api.get('/news/', { params }),
   getOne: (articleId) => api.get(`/news/${articleId}/`),
-  refresh: () => api.post('/news/refresh', {}, { timeout: 120000 }), // 2 minutes for news refresh (no trailing slash)
+  refresh: () => api.post('/news/refresh', {}), // Returns immediately with job_id
+  refreshStatus: (jobId) => api.get(`/news/refresh/status/${jobId}`), // Poll for job status
   analyzeSentiment: (articleId) => api.post(`/news/${articleId}/analyze-sentiment/`),
 };
 
@@ -148,6 +149,82 @@ export const queryApi = {
   getPortfolioSummary: () => api.get('/query/portfolio-summary/'),
   getStockSentiment: (symbol, days = 7) =>
     api.get(`/query/sentiment-analysis/${symbol}/`, { params: { days } }),
+};
+
+// Research API (Serper)
+export const researchApi = {
+  searchNews: (symbol, companyName = null, daysBack = 7) =>
+    api.get(`/research/search/${symbol}`, { params: { company_name: companyName, days_back: daysBack } }),
+  searchFilings: (symbol, companyName = null, filingType = null) =>
+    api.get(`/research/filings/${symbol}`, { params: { company_name: companyName, filing_type: filingType } }),
+  searchAnalysts: (symbol, companyName = null) =>
+    api.get(`/research/analysts/${symbol}`, { params: { company_name: companyName } }),
+  comprehensiveResearch: (symbol, companyName = null) =>
+    api.get(`/research/comprehensive/${symbol}`, { params: { company_name: companyName } }),
+  enhancedNews: (symbols, daysBack = 7, includeSec = false, includeAnalyst = false) =>
+    api.post('/research/news/', { symbols, days_back: daysBack, include_sec: includeSec, include_analyst: includeAnalyst }),
+  healthCheck: () => api.get('/research/health/'),
+};
+
+// Roboadvisor API
+export const roboadvisorApi = {
+  // Portfolio Analysis
+  getPortfolioAnalysis: (portfolioId) =>
+    api.get(`/roboadvisor/analysis/${portfolioId}`),
+
+  // Risk Analysis
+  getStockRisk: (symbol) =>
+    api.get(`/roboadvisor/risk/${symbol}`),
+  getPortfolioRisk: (portfolioId) =>
+    api.get(`/roboadvisor/risk/portfolio/${portfolioId}`),
+
+  // Trading Signals
+  getTradingSignal: (symbol) =>
+    api.get(`/roboadvisor/signals/${symbol}`),
+  getPortfolioRecommendations: (portfolioId, saveRecommendations = false) =>
+    api.get(`/roboadvisor/recommendations/${portfolioId}`, { params: { save_recommendations: saveRecommendations } }),
+
+  // Rebalancing
+  getRebalancingRecommendations: (portfolioId) =>
+    api.get(`/roboadvisor/rebalance/${portfolioId}`),
+
+  // User Profile
+  createOrUpdateProfile: (profileData, portfolioId = null) =>
+    api.post('/roboadvisor/profile/', profileData, { params: { portfolio_id: portfolioId } }),
+  getProfile: (portfolioId) =>
+    api.get(`/roboadvisor/profile/${portfolioId}`),
+
+  // Target Allocations
+  setTargetAllocations: (allocations, portfolioId = null) =>
+    api.post('/roboadvisor/allocations/', { allocations }, { params: { portfolio_id: portfolioId } }),
+  getAllocationSummary: (portfolioId) =>
+    api.get(`/roboadvisor/allocations/${portfolioId}`),
+
+  // Paper Trading
+  createPaperTrade: (tradeData, portfolioId = null) =>
+    api.post('/roboadvisor/paper-trade/', tradeData, { params: { portfolio_id: portfolioId } }),
+  createPaperTradeFromSignal: (symbol, quantity, portfolioId = null) =>
+    api.post('/roboadvisor/paper-trade/from-signal/', { symbol, quantity }, { params: { portfolio_id: portfolioId } }),
+  getPaperTrades: (portfolioId, status = null) =>
+    api.get(`/roboadvisor/paper-trades/${portfolioId}`, { params: { status } }),
+  closePaperTrade: (tradeId, exitPrice = null) =>
+    api.put(`/roboadvisor/paper-trade/${tradeId}/close`, null, { params: { exit_price: exitPrice } }),
+  getPaperPerformance: (portfolioId) =>
+    api.get(`/roboadvisor/paper-performance/${portfolioId}`),
+
+  // Recommendation Status
+  updateRecommendationStatus: (recommendationId, status) =>
+    api.put(`/roboadvisor/recommendation/${recommendationId}/status`, null, { params: { status } }),
+};
+
+// Batch Price API
+export const pricesApi = {
+  getBatchPrices: (symbols, forceRefresh = false) =>
+    api.get('/stocks/prices/batch/', { params: { symbols: symbols.join(','), force_refresh: forceRefresh } }),
+  getCacheStats: () =>
+    api.get('/stocks/prices/cache/stats/'),
+  clearCache: (symbols = null) =>
+    api.post('/stocks/prices/cache/clear/', null, { params: { symbols: symbols ? symbols.join(',') : null } }),
 };
 
 export default api;

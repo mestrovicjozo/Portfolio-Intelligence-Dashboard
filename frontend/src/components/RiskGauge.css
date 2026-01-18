@@ -1,0 +1,92 @@
+.risk-gauge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
+.risk-gauge-svg {
+  width: 100%;
+  height: auto;
+}
+
+.risk-gauge-fill {
+  transition: stroke-dashoffset 0.8s ease-out, stroke 0.3s ease;
+}
+
+.risk-gauge-value {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: -1.5rem;
+}
+
+.risk-gauge-score {
+  font-weight: 700;
+  line-height: 1;
+}
+
+.risk-gauge-label {
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Size variants */
+.risk-gauge-sm {
+  width: 80px;
+}
+
+.risk-gauge-sm .risk-gauge-score {
+  font-size: 1.25rem;
+}
+
+.risk-gauge-sm .risk-gauge-label {
+  font-size: 0.625rem;
+}
+
+.risk-gauge-sm .risk-gauge-value {
+  margin-top: -1rem;
+}
+
+.risk-gauge-md {
+  width: 120px;
+}
+
+.risk-gauge-md .risk-gauge-score {
+  font-size: 1.75rem;
+}
+
+.risk-gauge-md .risk-gauge-label {
+  font-size: 0.75rem;
+}
+
+.risk-gauge-lg {
+  width: 160px;
+}
+
+.risk-gauge-lg .risk-gauge-score {
+  font-size: 2.25rem;
+}
+
+.risk-gauge-lg .risk-gauge-label {
+  font-size: 0.875rem;
+}
+
+/* Risk badge (inline) */
+.risk-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.risk-badge-score {
+  font-weight: 500;
+  opacity: 0.8;
+}

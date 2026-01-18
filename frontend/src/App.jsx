@@ -4,6 +4,7 @@ import Dashboard from './pages/Dashboard';
 import StockDetail from './pages/StockDetail';
 import News from './pages/News';
 import Chat from './pages/Chat';
+import Roboadvisor from './pages/Roboadvisor';
 import Navigation from './components/Navigation';
 import AnimatedContainer from './components/AnimatedContainer';
 
@@ -45,6 +46,14 @@ function App() {
               element={
                 <AnimatedContainer animation="pageTransition">
                   <Chat />
+                </AnimatedContainer>
+              }
+            />
+            <Route
+              path="/roboadvisor"
+              element={
+                <AnimatedContainer animation="pageTransition">
+                  <Roboadvisor />
                 </AnimatedContainer>
               }
             />

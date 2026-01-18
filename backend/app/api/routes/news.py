@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 import asyncio
+import uuid
+import threading
 
-from backend.app.db.base import get_db
+from backend.app.db.base import get_db, SessionLocal
 from backend.app.models import NewsArticle, Stock, ArticleStock
 from backend.app.schemas.news_article import NewsArticle as NewsArticleSchema, NewsArticleWithStocks
 from backend.app.services.news_collector import NewsCollectorService
@@ -15,6 +17,9 @@ router = APIRouter()
 news_collector = NewsCollectorService()
 gemini_service = GeminiService()
 vector_store = VectorStoreService()
+
+# In-memory job status store (for simplicity; use Redis in production)
+_refresh_jobs: Dict[str, Dict[str, Any]] = {}
 
 
 @router.get("/", response_model=List[NewsArticleWithStocks])
@@ -46,36 +51,42 @@ def list_news(
     return result
 
 
-@router.post("/refresh", response_model=dict)
-async def refresh_news(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    """Fetch ALL news from ActuallyFreeAPI and associate with portfolio stocks."""
-    stocks = db.query(Stock).all()
-
-    if not stocks:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No stocks in portfolio. Add stocks first."
-        )
-
-    # Create a set of portfolio tickers for quick lookup
-    portfolio_tickers = {stock.symbol.upper() for stock in stocks}
-    stock_map = {stock.symbol.upper(): stock for stock in stocks}
+async def _do_refresh_news(job_id: str, portfolio_tickers: set, stock_ids: Dict[str, int]):
+    """Background task to refresh news articles."""
+    print(f"[NEWS REFRESH] Starting job {job_id} with tickers: {portfolio_tickers}")
+    db = SessionLocal()
 
     try:
+        _refresh_jobs[job_id]["status"] = "running"
+        _refresh_jobs[job_id]["message"] = "Fetching articles..."
+
         new_count = 0
         updated_count = 0
         skipped_count = 0
+        already_exists_count = 0
 
         # Fetch recent articles from ActuallyFreeAPI from last 30 days
         start_date = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+        print(f"[NEWS REFRESH] Fetching articles since {start_date}...")
+
         articles = await news_collector.fetch_from_actually_free_api(
             ticker=None,  # Get all articles
             limit=100,  # Max per page
             start_date=start_date  # Only get articles from last 30 days
         )
 
-        for item in articles:
+        print(f"[NEWS REFRESH] Fetched {len(articles)} articles from API")
+
+        total_articles = len(articles)
+        _refresh_jobs[job_id]["total_fetched"] = total_articles
+        _refresh_jobs[job_id]["message"] = f"Processing {total_articles} articles..."
+
+        for i, item in enumerate(articles):
             try:
+                # Update progress
+                _refresh_jobs[job_id]["progress"] = int((i / max(total_articles, 1)) * 100)
+                _refresh_jobs[job_id]["processed"] = i
+
                 # Extract tickers from article (handle None case)
                 article_tickers = item.get("tickers") or []
 
@@ -106,6 +117,7 @@ async def refresh_news(background_tasks: BackgroundTasks, db: Session = Depends(
                 ).first()
 
                 if existing:
+                    already_exists_count += 1
                     continue
 
                 # Use Gemini to analyze sentiment from title and summary
@@ -137,12 +149,13 @@ async def refresh_news(background_tasks: BackgroundTasks, db: Session = Depends(
 
                 # Link article to all relevant stocks in portfolio
                 for ticker in relevant_tickers:
-                    stock = stock_map[ticker]
-                    article_stock = ArticleStock(
-                        article_id=article.id,
-                        stock_id=stock.id
-                    )
-                    db.add(article_stock)
+                    stock = db.query(Stock).filter(Stock.symbol == ticker).first()
+                    if stock:
+                        article_stock = ArticleStock(
+                            article_id=article.id,
+                            stock_id=stock.id
+                        )
+                        db.add(article_stock)
 
                 # Add to vector store for semantic search
                 try:
@@ -163,6 +176,7 @@ async def refresh_news(background_tasks: BackgroundTasks, db: Session = Depends(
                     print(f"Error adding to vector store: {e}")
 
                 new_count += 1
+                _refresh_jobs[job_id]["new_articles"] = new_count
 
             except Exception as e:
                 print(f"Error processing article: {e}")
@@ -170,20 +184,122 @@ async def refresh_news(background_tasks: BackgroundTasks, db: Session = Depends(
 
         db.commit()
 
-        return {
-            "message": "News refresh completed",
-            "total_fetched": len(articles),
-            "new_articles": new_count,
-            "updated_articles": updated_count,
-            "skipped": skipped_count
-        }
+        print(f"[NEWS REFRESH] Completed - New: {new_count}, Already exists: {already_exists_count}, Skipped (not relevant): {skipped_count}")
+
+        _refresh_jobs[job_id]["status"] = "completed"
+        _refresh_jobs[job_id]["progress"] = 100
+        _refresh_jobs[job_id]["processed"] = total_articles
+        _refresh_jobs[job_id]["new_articles"] = new_count
+        _refresh_jobs[job_id]["updated_articles"] = updated_count
+        _refresh_jobs[job_id]["skipped"] = skipped_count
+        _refresh_jobs[job_id]["already_exists"] = already_exists_count
+        _refresh_jobs[job_id]["message"] = f"Found {new_count} new articles ({already_exists_count} already in database)"
+        _refresh_jobs[job_id]["completed_at"] = datetime.now().isoformat()
 
     except Exception as e:
+        import traceback
+        print(f"[NEWS REFRESH] ERROR: {str(e)}")
+        print(traceback.format_exc())
+        _refresh_jobs[job_id]["status"] = "failed"
+        _refresh_jobs[job_id]["message"] = f"Error: {str(e)}"
+        _refresh_jobs[job_id]["error"] = str(e)
         db.rollback()
+    finally:
+        db.close()
+
+
+def _run_async_refresh(job_id: str, portfolio_tickers: set, stock_ids: Dict[str, int]):
+    """Run the async refresh in a new event loop (for threading)."""
+    print(f"[NEWS REFRESH] Thread started for job {job_id}")
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(_do_refresh_news(job_id, portfolio_tickers, stock_ids))
+    except Exception as e:
+        import traceback
+        print(f"[NEWS REFRESH] Thread error: {str(e)}")
+        print(traceback.format_exc())
+        _refresh_jobs[job_id]["status"] = "failed"
+        _refresh_jobs[job_id]["message"] = f"Error: {str(e)}"
+        _refresh_jobs[job_id]["error"] = str(e)
+    finally:
+        loop.close()
+        print(f"[NEWS REFRESH] Thread finished for job {job_id}")
+
+
+@router.post("/refresh", response_model=dict)
+async def refresh_news(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """Start a background job to fetch news from ActuallyFreeAPI.
+
+    Returns immediately with a job_id that can be used to poll for status.
+    """
+    stocks = db.query(Stock).all()
+
+    if not stocks:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error refreshing news: {str(e)}"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No stocks in portfolio. Add stocks first."
         )
+
+    # Create a set of portfolio tickers for quick lookup
+    portfolio_tickers = {stock.symbol.upper() for stock in stocks}
+    stock_ids = {stock.symbol.upper(): stock.id for stock in stocks}
+
+    # Generate a unique job ID
+    job_id = str(uuid.uuid4())
+
+    # Initialize job status
+    _refresh_jobs[job_id] = {
+        "job_id": job_id,
+        "status": "pending",
+        "progress": 0,
+        "processed": 0,
+        "total_fetched": 0,
+        "new_articles": 0,
+        "updated_articles": 0,
+        "skipped": 0,
+        "message": "Starting news refresh...",
+        "started_at": datetime.now().isoformat(),
+        "completed_at": None,
+        "error": None
+    }
+
+    # Start background task in a separate thread to avoid blocking
+    thread = threading.Thread(
+        target=_run_async_refresh,
+        args=(job_id, portfolio_tickers, stock_ids)
+    )
+    thread.start()
+
+    return {
+        "job_id": job_id,
+        "status": "pending",
+        "message": "News refresh job started. Poll /api/news/refresh/status/{job_id} for progress."
+    }
+
+
+@router.get("/refresh/status/{job_id}", response_model=dict)
+def get_refresh_status(job_id: str):
+    """Get the status of a news refresh job."""
+    if job_id not in _refresh_jobs:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {job_id} not found"
+        )
+
+    job = _refresh_jobs[job_id]
+
+    # Clean up completed jobs older than 10 minutes
+    if job["status"] in ["completed", "failed"] and job.get("completed_at"):
+        completed_at = datetime.fromisoformat(job["completed_at"])
+        if datetime.now() - completed_at > timedelta(minutes=10):
+            del _refresh_jobs[job_id]
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Job {job_id} expired"
+            )
+
+    return job
 
 
 @router.get("/{article_id}", response_model=NewsArticleWithStocks)

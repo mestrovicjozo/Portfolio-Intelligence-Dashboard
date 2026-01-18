@@ -12,6 +12,14 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str
     FINNHUB_API_KEY: str
 
+    # Jina AI Embeddings (cost optimization)
+    JINA_API_KEY: str = ""
+    JINA_EMBEDDING_MODEL: str = "jina-embeddings-v3"
+
+    # Serper (Google Search API)
+    SERPER_API_KEY: str = ""
+    SERPER_CACHE_TTL: int = 3600  # 1 hour cache
+
     # Database
     DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/portfolio_intelligence"
     CHROMA_PERSIST_DIR: str = str(Path(__file__).parent.parent.parent.parent / "data" / "chroma")
@@ -28,8 +36,12 @@ class Settings(BaseSettings):
     ALPHA_VANTAGE_BASE_URL: str = "https://www.alphavantage.co/query"
 
     # Gemini settings
-    GEMINI_MODEL: str = "gemini-2.5-flash"
-    EMBEDDING_DIMENSION: int = 768
+    GEMINI_MODEL: str = "gemini-2.5-flash-lite"
+    EMBEDDING_DIMENSION: int = 768  # Note: Jina uses 1024, Gemini uses 768
+
+    # Price fetching settings
+    PRICE_CACHE_TTL: int = 60  # seconds
+    MAX_CONCURRENT_PRICE_REQUESTS: int = 10
 
     # Scheduler settings
     SCHEDULER_TIMEZONE: str = "America/New_York"
@@ -49,6 +61,11 @@ class Settings(BaseSettings):
     LOGO_DIR: str = str(Path(__file__).parent.parent.parent.parent / "data" / "logos")
     MAX_LOGO_SIZE: int = 2_097_152  # 2MB max file size
     ALLOWED_LOGO_EXTENSIONS: List[str] = ["png", "jpg", "jpeg", "svg", "webp"]
+
+    # Roboadvisor settings
+    DEFAULT_RISK_TOLERANCE: str = "moderate"
+    DEFAULT_REBALANCE_THRESHOLD: float = 5.0  # percentage
+    SIGNAL_CONFIDENCE_THRESHOLD: float = 0.6
 
     class Config:
         env_file = ".env"

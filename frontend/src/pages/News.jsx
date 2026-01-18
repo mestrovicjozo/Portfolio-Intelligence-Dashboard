@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw, ExternalLink, Filter, Info, Sparkles, ChevronDown, AlertCircle } from 'lucide-react';
 import { newsApi, positionsApi } from '../services/api';
@@ -14,6 +14,12 @@ function News() {
   const [filterStock, setFilterStock] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
   const [showSentimentDemo, setShowSentimentDemo] = useState(false); // Start collapsed
+
+  // Refresh job state
+  const [refreshJobId, setRefreshJobId] = useState(null);
+  const [refreshProgress, setRefreshProgress] = useState(0);
+  const [refreshMessage, setRefreshMessage] = useState('');
+  const pollingIntervalRef = useRef(null);
 
   const { data: news, isLoading, isError, error } = useQuery({
     queryKey: ['news'],
@@ -41,25 +47,116 @@ function News() {
     },
   });
 
+  // Clean up polling interval on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Poll for job status
+  const pollJobStatus = useCallback(async (jobId) => {
+    try {
+      const response = await newsApi.refreshStatus(jobId);
+      const job = response.data;
+
+      setRefreshProgress(job.progress || 0);
+      setRefreshMessage(job.message || 'Processing...');
+
+      if (job.status === 'completed') {
+        // Clear polling
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+        setRefreshJobId(null);
+        setRefreshProgress(0);
+        setRefreshMessage('');
+
+        // Refresh news list
+        queryClient.invalidateQueries(['news']);
+
+        const newCount = job.new_articles || 0;
+        const existsCount = job.already_exists || 0;
+        const message = newCount > 0
+          ? `Found ${newCount} new articles`
+          : existsCount > 0
+            ? `No new articles (${existsCount} already in database)`
+            : job.message || 'Refresh completed';
+
+        toast.success('News Refreshed', message, 5000);
+      } else if (job.status === 'failed') {
+        // Clear polling
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+        setRefreshJobId(null);
+        setRefreshProgress(0);
+        setRefreshMessage('');
+
+        toast.error(
+          'Refresh Failed',
+          job.error || 'An error occurred while refreshing news.',
+          6000
+        );
+      }
+    } catch (err) {
+      console.error('Error polling job status:', err);
+      // Stop polling on error
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      setRefreshJobId(null);
+      setRefreshProgress(0);
+      setRefreshMessage('');
+
+      toast.error(
+        'Refresh Failed',
+        'Lost connection to refresh job.',
+        5000
+      );
+    }
+  }, [queryClient, toast]);
+
+  // Start refresh job
   const refreshMutation = useMutation({
     mutationFn: () => newsApi.refresh(),
     onSuccess: (response) => {
-      queryClient.invalidateQueries(['news']);
-      const { new_articles = 0, updated_articles = 0 } = response.data || {};
-      toast.success(
-        'News Refreshed',
-        `Found ${new_articles} new articles and updated ${updated_articles} existing articles`,
-        5000
-      );
+      const { job_id } = response.data;
+      if (job_id) {
+        setRefreshJobId(job_id);
+        setRefreshProgress(0);
+        setRefreshMessage('Starting...');
+
+        // Start polling for status
+        pollingIntervalRef.current = setInterval(() => {
+          pollJobStatus(job_id);
+        }, 2000); // Poll every 2 seconds
+      } else {
+        // Fallback for old API behavior (immediate completion)
+        queryClient.invalidateQueries(['news']);
+        const { new_articles = 0 } = response.data || {};
+        toast.success(
+          'News Refreshed',
+          `Found ${new_articles} new articles`,
+          5000
+        );
+      }
     },
     onError: (error) => {
       toast.error(
         'Refresh Failed',
-        error.response?.data?.detail || 'Failed to refresh news. Please try again.',
+        error.response?.data?.detail || 'Failed to start refresh. Please try again.',
         6000
       );
     },
   });
+
+  const isRefreshing = refreshMutation.isPending || refreshJobId !== null;
 
   const getSentimentLabel = (score) => {
     if (score === null || score === undefined) return 'neutral';
@@ -156,16 +253,36 @@ function News() {
             <button
               className="btn btn-primary"
               onClick={() => {
-                console.log('Refresh button clicked, isPending:', refreshMutation.isPending);
-                refreshMutation.mutate();
+                if (!isRefreshing) {
+                  refreshMutation.mutate();
+                }
               }}
-              disabled={refreshMutation.isPending}
+              disabled={isRefreshing}
             >
-              <RefreshCw size={20} className={refreshMutation.isPending ? 'spinning' : ''} />
-              {refreshMutation.isPending ? 'Refreshing...' : 'Refresh News'}
+              <RefreshCw size={20} className={isRefreshing ? 'spinning' : ''} />
+              {isRefreshing ? 'Refreshing...' : 'Refresh News'}
             </button>
           </div>
         </div>
+
+        {/* Refresh Progress Indicator */}
+        {isRefreshing && (
+          <div className="refresh-progress card">
+            <div className="refresh-progress-header">
+              <RefreshCw size={18} className="spinning" />
+              <span className="refresh-status">{refreshMessage || 'Processing...'}</span>
+            </div>
+            <div className="progress-bar-container">
+              <div className="progress-bar">
+                <div
+                  className="progress-bar-fill"
+                  style={{ width: `${refreshProgress}%` }}
+                />
+              </div>
+              <span className="progress-percent">{refreshProgress}%</span>
+            </div>
+          </div>
+        )}
 
         <div className="sentiment-demo card">
           <button

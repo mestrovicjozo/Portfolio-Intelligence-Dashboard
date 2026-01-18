@@ -1,22 +1,50 @@
 import google.generativeai as genai
 from typing import List, Dict, Any, Optional
 import logging
+import json
 from backend.app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Lazy import to avoid circular dependency
+_jina_service = None
+
+
+def _get_jina_service():
+    """Get Jina service instance lazily."""
+    global _jina_service
+    if _jina_service is None:
+        try:
+            from backend.app.services.jina_embedding_service import get_jina_service
+            _jina_service = get_jina_service()
+        except Exception as e:
+            logger.warning(f"Jina AI not available, falling back to Gemini embeddings: {e}")
+            _jina_service = False  # Mark as unavailable
+    return _jina_service if _jina_service else None
+
 
 class GeminiService:
-    """Service for interacting with Google Gemini API."""
+    """
+    Service for interacting with Google Gemini API.
 
-    def __init__(self, api_key: Optional[str] = None):
+    Architecture:
+    - Embeddings: Delegated to Jina AI (cost optimization)
+    - Sentiment Analysis: Gemini
+    - Q&A Generation: Gemini
+    - Roboadvisor Signals: Gemini
+    """
+
+    def __init__(self, api_key: Optional[str] = None, use_jina_embeddings: bool = True):
         self.api_key = api_key or settings.GEMINI_API_KEY
         genai.configure(api_key=self.api_key)
         self.model = genai.GenerativeModel(settings.GEMINI_MODEL)
+        self._use_jina = use_jina_embeddings
 
     def generate_embedding(self, text: str) -> List[float]:
         """
-        Generate embedding vector for text using Gemini.
+        Generate embedding vector for text.
+
+        Delegates to Jina AI for cost optimization if available.
 
         Args:
             text: Input text to embed
@@ -24,6 +52,16 @@ class GeminiService:
         Returns:
             List of floats representing the embedding vector
         """
+        # Try Jina AI first (cost optimization)
+        if self._use_jina:
+            jina = _get_jina_service()
+            if jina:
+                try:
+                    return jina.generate_embedding(text)
+                except Exception as e:
+                    logger.warning(f"Jina embedding failed, falling back to Gemini: {e}")
+
+        # Fallback to Gemini
         try:
             result = genai.embed_content(
                 model="models/text-embedding-004",
@@ -39,12 +77,24 @@ class GeminiService:
         """
         Generate embedding vector for search query.
 
+        Delegates to Jina AI for cost optimization if available.
+
         Args:
             query: Search query text
 
         Returns:
             List of floats representing the embedding vector
         """
+        # Try Jina AI first
+        if self._use_jina:
+            jina = _get_jina_service()
+            if jina:
+                try:
+                    return jina.generate_query_embedding(query)
+                except Exception as e:
+                    logger.warning(f"Jina query embedding failed, falling back to Gemini: {e}")
+
+        # Fallback to Gemini
         try:
             result = genai.embed_content(
                 model="models/text-embedding-004",
@@ -55,6 +105,33 @@ class GeminiService:
         except Exception as e:
             logger.error(f"Error generating query embedding: {e}")
             raise
+
+    def generate_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
+        """
+        Generate embeddings for multiple texts in batch.
+
+        More efficient for multiple documents.
+
+        Args:
+            texts: List of texts to embed
+
+        Returns:
+            List of embedding vectors
+        """
+        if self._use_jina:
+            jina = _get_jina_service()
+            if jina:
+                try:
+                    return jina.generate_embeddings_batch(texts)
+                except Exception as e:
+                    logger.warning(f"Jina batch embedding failed, falling back to sequential: {e}")
+
+        # Fallback to sequential Gemini calls
+        embeddings = []
+        for text in texts:
+            emb = self.generate_embedding(text)
+            embeddings.append(emb)
+        return embeddings
 
     def analyze_sentiment(self, text: str) -> Dict[str, Any]:
         """
@@ -257,3 +334,219 @@ Summary:
         except Exception as e:
             logger.error(f"Error summarizing text: {e}")
             return text[:500] + "..." if len(text) > 500 else text
+
+    def generate_trading_signal(
+        self,
+        symbol: str,
+        risk_data: Dict[str, Any],
+        sentiment_data: Dict[str, Any],
+        price_trend: Dict[str, Any],
+        news_context: Optional[List[Dict[str, Any]]] = None
+    ) -> Dict[str, Any]:
+        """
+        Generate AI-powered trading signal for a stock.
+
+        Uses risk metrics, sentiment analysis, and price trends to generate
+        buy/sell/hold recommendations with confidence scores.
+
+        Args:
+            symbol: Stock ticker symbol
+            risk_data: Risk scores (volatility, beta, overall risk)
+            sentiment_data: News sentiment analysis
+            price_trend: Price movement data (returns, momentum)
+            news_context: Optional recent news articles
+
+        Returns:
+            Dict with action, confidence, reasoning, and supporting data
+        """
+        # Build context for analysis
+        news_str = ""
+        if news_context:
+            for idx, article in enumerate(news_context[:5], 1):
+                news_str += f"\n{idx}. {article.get('title', 'N/A')} (Sentiment: {article.get('sentiment_score', 'N/A')})"
+
+        prompt = f"""You are an expert financial analyst providing trading recommendations.
+Analyze the following data for {symbol} and provide a trading signal.
+
+RISK METRICS:
+- Overall Risk Score: {risk_data.get('overall_risk', 'N/A')}/100
+- Volatility Score: {risk_data.get('volatility_score', 'N/A')}/100
+- Beta: {risk_data.get('beta', 'N/A')}
+- Sentiment Risk: {risk_data.get('sentiment_risk', 'N/A')}/100
+
+SENTIMENT DATA:
+- Average Score: {sentiment_data.get('average_score', 'N/A')} (-1 to 1)
+- Trend: {sentiment_data.get('trend', 'N/A')}
+- Article Count: {sentiment_data.get('article_count', 'N/A')}
+
+PRICE TRENDS:
+- 7-Day Return: {price_trend.get('return_7d', 'N/A')}%
+- 30-Day Return: {price_trend.get('return_30d', 'N/A')}%
+- Momentum: {price_trend.get('momentum', 'N/A')}
+
+RECENT NEWS:{news_str if news_str else ' No recent news available'}
+
+Based on this analysis, provide a trading recommendation.
+
+IMPORTANT GUIDELINES:
+1. Consider both risk and opportunity
+2. Higher volatility = lower confidence
+3. Negative sentiment trends warrant caution
+4. Strong momentum can support trend continuation
+5. Be conservative with high-risk stocks
+
+Respond ONLY with a JSON object in this exact format:
+{{"action": "<BUY/SELL/HOLD>", "confidence": <float 0-1>, "reasoning": "<2-3 sentence explanation>", "key_factors": ["<factor1>", "<factor2>", "<factor3>"], "risk_level": "<low/medium/high>", "time_horizon": "<short/medium/long>"}}
+"""
+
+        try:
+            response = self.model.generate_content(prompt)
+            result_text = response.text.strip()
+
+            # Parse JSON response
+            if result_text.startswith("```"):
+                result_text = result_text.split("```")[1]
+                if result_text.startswith("json"):
+                    result_text = result_text[4:]
+                result_text = result_text.strip()
+
+            signal = json.loads(result_text)
+
+            # Validate and normalize
+            action = signal.get("action", "HOLD").upper()
+            if action not in ["BUY", "SELL", "HOLD"]:
+                action = "HOLD"
+
+            confidence = max(0.0, min(1.0, float(signal.get("confidence", 0.5))))
+
+            return {
+                "symbol": symbol,
+                "action": action,
+                "confidence": confidence,
+                "reasoning": signal.get("reasoning", ""),
+                "key_factors": signal.get("key_factors", []),
+                "risk_level": signal.get("risk_level", "medium"),
+                "time_horizon": signal.get("time_horizon", "medium"),
+                "generated_at": None  # Will be set by caller
+            }
+
+        except Exception as e:
+            logger.error(f"Error generating trading signal for {symbol}: {e}")
+            return {
+                "symbol": symbol,
+                "action": "HOLD",
+                "confidence": 0.0,
+                "reasoning": "Unable to generate signal due to analysis error",
+                "key_factors": [],
+                "risk_level": "unknown",
+                "time_horizon": "unknown",
+                "error": str(e)
+            }
+
+    def generate_portfolio_analysis(
+        self,
+        portfolio_data: Dict[str, Any],
+        risk_scores: List[Dict[str, Any]],
+        allocation_drift: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Generate comprehensive portfolio analysis and recommendations.
+
+        Args:
+            portfolio_data: Portfolio summary (total value, positions)
+            risk_scores: Risk scores for each position
+            allocation_drift: Current vs target allocation
+
+        Returns:
+            Dict with analysis, recommendations, and action items
+        """
+        # Build position summary
+        positions_str = ""
+        for score in risk_scores[:10]:  # Limit to top 10
+            positions_str += f"\n- {score.get('symbol')}: Risk={score.get('overall_risk', 'N/A')}/100, Weight={score.get('weight', 'N/A')}%"
+
+        # Build drift summary
+        drift_str = ""
+        for symbol, drift in list(allocation_drift.items())[:10]:
+            drift_str += f"\n- {symbol}: Drift={drift.get('drift', 0):+.1f}%"
+
+        prompt = f"""You are a professional portfolio advisor analyzing a client's investment portfolio.
+
+PORTFOLIO SUMMARY:
+- Total Value: ${portfolio_data.get('total_value', 0):,.2f}
+- Number of Positions: {portfolio_data.get('position_count', 0)}
+- Average Risk Score: {portfolio_data.get('average_risk', 'N/A')}/100
+
+POSITION RISK SCORES:{positions_str if positions_str else ' No positions'}
+
+ALLOCATION DRIFT (vs targets):{drift_str if drift_str else ' No drift data'}
+
+Provide a comprehensive portfolio analysis with actionable recommendations.
+
+Respond ONLY with a JSON object in this exact format:
+{{
+    "overall_health": "<excellent/good/fair/poor>",
+    "risk_assessment": "<conservative/moderate/aggressive>",
+    "summary": "<2-3 sentence portfolio summary>",
+    "key_concerns": ["<concern1>", "<concern2>"],
+    "opportunities": ["<opportunity1>", "<opportunity2>"],
+    "recommendations": [
+        {{"priority": "high", "action": "<specific action>", "reasoning": "<why>"}},
+        {{"priority": "medium", "action": "<specific action>", "reasoning": "<why>"}}
+    ],
+    "rebalancing_needed": <true/false>,
+    "suggested_actions": ["<action1>", "<action2>"]
+}}
+"""
+
+        try:
+            response = self.model.generate_content(prompt)
+            result_text = response.text.strip()
+
+            if result_text.startswith("```"):
+                result_text = result_text.split("```")[1]
+                if result_text.startswith("json"):
+                    result_text = result_text[4:]
+                result_text = result_text.strip()
+
+            analysis = json.loads(result_text)
+            return analysis
+
+        except Exception as e:
+            logger.error(f"Error generating portfolio analysis: {e}")
+            return {
+                "overall_health": "unknown",
+                "risk_assessment": "unknown",
+                "summary": "Unable to generate analysis due to error",
+                "key_concerns": [],
+                "opportunities": [],
+                "recommendations": [],
+                "rebalancing_needed": False,
+                "suggested_actions": [],
+                "error": str(e)
+            }
+
+    def get_embedding_service_info(self) -> Dict[str, Any]:
+        """
+        Get information about the current embedding service.
+
+        Returns:
+            Dict with embedding service details
+        """
+        jina = _get_jina_service() if self._use_jina else None
+
+        if jina:
+            return {
+                "service": "jina",
+                "model": jina.model,
+                "dimension": jina.dimension,
+                "status": "active"
+            }
+        else:
+            return {
+                "service": "gemini",
+                "model": "text-embedding-004",
+                "dimension": 768,
+                "status": "active",
+                "note": "Jina AI not configured, using Gemini fallback"
+            }

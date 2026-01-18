@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from datetime import datetime, timedelta
 import os
 
@@ -11,6 +11,7 @@ from backend.app.schemas.stock import Stock as StockSchema, StockCreate, StockWi
 from backend.app.services.alpha_vantage import AlphaVantageService
 from backend.app.services.custom_stock_api import CustomStockAPIService
 from backend.app.services.logo_service import logo_service
+from backend.app.services.unified_price_service import unified_price_service
 from backend.app.core.config import settings
 import logging
 
@@ -427,3 +428,87 @@ def update_current_prices(db: Session = Depends(get_db)):
         db.rollback()
         logger.error(f"Error updating prices: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/prices/batch/")
+def get_batch_prices(
+    symbols: str = Query(..., description="Comma-separated list of stock symbols"),
+    force_refresh: bool = Query(False, description="Force refresh from API (bypass cache)")
+):
+    """
+    Get current prices for multiple stocks in a single batch request.
+
+    Uses caching with 60s TTL for efficiency.
+
+    Args:
+        symbols: Comma-separated stock symbols (e.g., "AAPL,MSFT,GOOGL")
+        force_refresh: If true, bypass cache and fetch fresh data
+
+    Returns:
+        Dict with prices for each symbol and cache stats
+    """
+    # Parse symbols
+    symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+
+    if not symbol_list:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No valid symbols provided"
+        )
+
+    if len(symbol_list) > 50:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Maximum 50 symbols per request"
+        )
+
+    try:
+        prices = unified_price_service.get_current_prices(
+            symbols=symbol_list,
+            force_refresh=force_refresh
+        )
+
+        return {
+            "prices": prices,
+            "requested": len(symbol_list),
+            "returned": len(prices),
+            "cache_stats": unified_price_service.cache_stats()
+        }
+
+    except Exception as e:
+        logger.error(f"Error in batch price fetch: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching batch prices: {str(e)}"
+        )
+
+
+@router.get("/prices/cache/stats/")
+def get_price_cache_stats():
+    """Get statistics about the price cache."""
+    return unified_price_service.cache_stats()
+
+
+@router.post("/prices/cache/clear/")
+def clear_price_cache(
+    symbols: Optional[str] = Query(None, description="Comma-separated symbols to clear, or all if not specified")
+):
+    """
+    Clear the price cache.
+
+    Args:
+        symbols: Optional comma-separated symbols to clear. Clears all if not specified.
+
+    Returns:
+        Number of entries cleared
+    """
+    if symbols:
+        symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+        cleared = unified_price_service.invalidate_cache(symbol_list)
+    else:
+        cleared = unified_price_service.invalidate_cache()
+
+    return {
+        "message": "Cache cleared",
+        "entries_cleared": cleared
+    }

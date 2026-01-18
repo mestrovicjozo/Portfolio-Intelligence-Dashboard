@@ -18,6 +18,7 @@ class Portfolio(Base):
 
     # Relationships
     positions = relationship("Position", back_populates="portfolio", cascade="all, delete-orphan")
+    user_profile = relationship("UserProfile", back_populates="portfolio", uselist=False, cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Portfolio(name={self.name}, active={self.is_active})>"

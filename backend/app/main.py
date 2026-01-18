@@ -4,6 +4,7 @@ import logging
 
 from backend.app.core.config import settings
 from backend.app.api.routes import stocks, news, query, portfolios, positions, stock_actions, admin, websocket
+from backend.app.api.routes import research, roboadvisor
 from backend.app.db.base import engine, Base
 from backend.app.services.scheduler import scheduler_service
 
@@ -42,6 +43,8 @@ app.include_router(news.router, prefix="/api/news", tags=["news"])
 app.include_router(query.router, prefix="/api/query", tags=["query"])
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 app.include_router(websocket.router, tags=["websocket"])
+app.include_router(research.router, prefix="/api/research", tags=["research"])
+app.include_router(roboadvisor.router, prefix="/api/roboadvisor", tags=["roboadvisor"])
 
 
 @app.on_event("startup")
