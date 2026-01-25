@@ -26,15 +26,22 @@ Access at: **http://localhost:3000**
 **Optional:**
 - **Serper** - Web search for research feature ([serper.dev](https://serper.dev/))
 
-## Test Data
+## Initial Setup
 
-After starting the app, seed a sample portfolio with tech stocks:
+After starting the app for the first time, seed a sample portfolio with real data:
 
 ```bash
-docker compose exec backend python -m backend.scripts.seed_sample_data
+docker compose exec backend python -m backend.scripts.seed_sample_data --clean
 ```
 
-This creates a "Sample Portfolio" with AAPL, MSFT, GOOGL, NVDA, and AMZN positions.
+This will:
+- Create an imbalanced "Sample Portfolio" with 5 tech stocks (AAPL, MSFT, GOOGL, NVDA, AMZN)
+- Fetch 100 days of real price history via Alpha Vantage
+- Fetch 50 recent news articles from ActuallyFreeAPI
+- Set up target allocations for the roboadvisor
+- Show +16% portfolio gains with intentional drift to demonstrate rebalancing recommendations
+
+**First-time users:** Type `yes` when prompted to confirm data initialization.
 
 To remove the sample data:
 ```bash

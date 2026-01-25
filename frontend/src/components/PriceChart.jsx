@@ -11,7 +11,7 @@ const PriceChart = ({ symbol }) => {
   const { data: priceData, isLoading } = useQuery({
     queryKey: ['stock-prices', symbol, timeframe],
     queryFn: async () => {
-      const days = timeframe === '1D' ? 1 : timeframe === '7D' ? 7 : 30;
+      const days = timeframe === '7D' ? 7 : 30;
       const response = await axios.get(`http://localhost:8000/api/stocks/${symbol}/prices`, {
         params: { days }
       });
@@ -67,7 +67,7 @@ const PriceChart = ({ symbol }) => {
           </div>
         </div>
         <div className="timeframe-buttons">
-          {['1D', '7D', '30D'].map((tf) => (
+          {['7D', '30D'].map((tf) => (
             <button
               key={tf}
               className={`timeframe-btn ${timeframe === tf ? 'active' : ''}`}

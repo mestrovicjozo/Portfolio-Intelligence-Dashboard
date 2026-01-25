@@ -297,23 +297,38 @@ function Roboadvisor() {
                 <div className="rebalancing-content">
                   {rebalancingLoading ? (
                     <p className="text-secondary">Loading recommendations...</p>
-                  ) : rebalancing?.recommendations?.length > 0 ? (
-                    <div className="rebalancing-list">
-                      {rebalancing.recommendations.map((rec, index) => (
-                        <div key={index} className="rebalancing-item">
-                          <div className="rebalance-action" data-action={rec.action?.toLowerCase()}>
-                            {rec.action === 'BUY' ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
-                            <span>{rec.action}</span>
+                  ) : rebalancing?.rebalancing_needed && rebalancing?.recommendations?.length > 0 ? (
+                    <>
+                      <div className="rebalancing-summary" style={{ marginBottom: '1rem', padding: '0.75rem', background: '#fef3c7', borderRadius: '6px', fontSize: '0.875rem' }}>
+                        <strong>Portfolio needs rebalancing</strong> - {rebalancing.recommendations.length} action{rebalancing.recommendations.length > 1 ? 's' : ''} recommended (Threshold: {rebalancing.threshold}%)
+                      </div>
+                      <div className="rebalancing-list">
+                        {rebalancing.recommendations.map((rec, index) => (
+                          <div key={index} className="rebalancing-item">
+                            <div className="rebalance-action" data-action={rec.action?.toLowerCase()}>
+                              {rec.action === 'BUY' ? <TrendingUp size={16} /> : <TrendingDown size={16} />}
+                              <span>{rec.action}</span>
+                            </div>
+                            <span className="rebalance-symbol">{rec.symbol}</span>
+                            <span className="rebalance-amount">
+                              {rec.quantity?.toFixed(2) || '0'} shares
+                              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 'normal' }}>
+                                ${rec.trade_value?.toFixed(2) || '0.00'}
+                              </div>
+                            </span>
+                            <span className="rebalance-reason">
+                              <strong>{rec.direction}</strong>: {rec.current_weight?.toFixed(1)}% → {rec.target_weight?.toFixed(1)}%
+                              <span style={{ color: rec.drift_percent > 0 ? '#ef4444' : '#10b981', fontWeight: '600' }}>
+                                {' '}({rec.drift_percent > 0 ? '+' : ''}{rec.drift_percent?.toFixed(1)}%)
+                              </span>
+                            </span>
                           </div>
-                          <span className="rebalance-symbol">{rec.symbol}</span>
-                          <span className="rebalance-amount">${rec.amount?.toFixed(2) || '0.00'}</span>
-                          <span className="rebalance-reason">{rec.reason}</span>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    </>
                   ) : (
                     <p className="text-secondary">
-                      No rebalancing needed. Your portfolio is well-balanced.
+                      ✓ No rebalancing needed. Your portfolio is well-balanced.
                     </p>
                   )}
                 </div>

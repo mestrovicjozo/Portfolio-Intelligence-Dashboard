@@ -145,25 +145,29 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.75rem;
-  background: #f9fafb;
-  border-radius: 6px;
+  padding: 1rem;
+  background: #ffffff;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
 }
 
 .stock-risk-info {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
 .stock-symbol {
-  font-weight: 600;
-  color: var(--text-primary);
+  font-weight: 700;
+  font-size: 1.125rem;
+  color: #111827;
+  letter-spacing: -0.01em;
 }
 
 .stock-weight {
   font-size: 0.875rem;
-  color: var(--text-secondary);
+  color: #6b7280;
+  font-weight: 500;
 }
 
 .stock-risk-metrics {
@@ -180,11 +184,12 @@
 }
 
 .metric-item .metric-label {
-  color: var(--text-secondary);
+  color: #6b7280;
 }
 
 .metric-item .metric-value {
   font-weight: 500;
+  color: #111827;
 }
 
 /* Rebalancing */
@@ -227,23 +232,25 @@
 
 .rebalancing-item {
   display: grid;
-  grid-template-columns: 80px 80px 100px 1fr;
+  grid-template-columns: 90px 120px 120px 1fr;
   gap: 1rem;
   align-items: center;
-  padding: 0.75rem;
-  background: #f9fafb;
-  border-radius: 6px;
+  padding: 1rem;
+  background: #ffffff;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
 }
 
 .rebalance-action {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 600;
+  gap: 0.375rem;
+  padding: 0.375rem 0.625rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
   text-transform: uppercase;
+  letter-spacing: 0.025em;
 }
 
 .rebalance-action[data-action="buy"] {
@@ -257,16 +264,22 @@
 }
 
 .rebalance-symbol {
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 1.125rem;
+  color: #111827;
+  letter-spacing: -0.01em;
 }
 
 .rebalance-amount {
-  font-weight: 500;
+  font-weight: 600;
+  font-size: 1rem;
+  color: #111827;
 }
 
 .rebalance-reason {
   font-size: 0.875rem;
-  color: var(--text-secondary);
+  color: #4b5563;
+  line-height: 1.4;
 }
 
 /* Signals Section */
@@ -368,6 +381,35 @@
   .stock-risk-item,
   .rebalancing-item {
     background: #1f2937;
+    border-color: #374151;
+  }
+
+  .stock-symbol {
+    color: #f9fafb;
+  }
+
+  .stock-weight {
+    color: #d1d5db;
+  }
+
+  .rebalance-symbol {
+    color: #f9fafb;
+  }
+
+  .rebalance-amount {
+    color: #f9fafb;
+  }
+
+  .rebalance-reason {
+    color: #d1d5db;
+  }
+
+  .metric-item .metric-label {
+    color: #9ca3af;
+  }
+
+  .metric-item .metric-value {
+    color: #f9fafb;
   }
 
   .rebalancing-content {
@@ -409,12 +451,28 @@
   }
 
   .rebalancing-item {
-    grid-template-columns: 1fr 1fr;
-    gap: 0.5rem;
+    grid-template-columns: auto 1fr;
+    gap: 0.75rem;
+  }
+
+  .rebalance-action {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .rebalance-symbol {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .rebalance-amount {
+    grid-column: 1;
+    grid-row: 2;
   }
 
   .rebalance-reason {
-    grid-column: 1 / -1;
+    grid-column: 2;
+    grid-row: 2;
   }
 
   .signals-grid,
