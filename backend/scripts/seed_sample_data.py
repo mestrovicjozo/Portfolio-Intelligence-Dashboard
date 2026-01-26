@@ -36,6 +36,8 @@ from backend.app.models.target_allocation import TargetAllocation
 from backend.app.services.news_collector import NewsCollectorService
 from backend.app.services.yahoo_finance import YahooFinanceService
 from backend.app.services.alpha_vantage import AlphaVantageService
+from backend.app.services.vector_store import VectorStoreService
+from backend.app.services.jina_embedding_service import JinaEmbeddingService
 
 
 # Sample stocks to create
@@ -162,6 +164,84 @@ async def fetch_and_store_news(session, stock_map: dict):
     return stored_count
 
 
+def generate_embeddings_for_articles(session):
+    """Generate embeddings for all articles and store in ChromaDB."""
+    print("\n" + "="*70)
+    print("GENERATING EMBEDDINGS FOR RAG")
+    print("="*70)
+
+    from backend.app.models import NewsArticle, ArticleStock
+
+    # Initialize services
+    try:
+        jina = JinaEmbeddingService(settings.JINA_API_KEY)
+        print(f"Using Jina AI: {jina.model} ({jina.dimension} dimensions)")
+    except Exception as e:
+        print(f"ERROR: Could not initialize Jina AI: {e}")
+        print("Embeddings will NOT be generated. Ask AI feature will not work.")
+        return 0
+
+    vector_store = VectorStoreService()
+
+    # Get all articles
+    articles = session.query(NewsArticle).all()
+    total = len(articles)
+
+    if total == 0:
+        print("No articles to embed.")
+        return 0
+
+    print(f"Generating embeddings for {total} articles...")
+
+    # Prepare batch data
+    texts = []
+    article_data = []
+
+    for article in articles:
+        # Create content for embedding
+        content = f"{article.title}\n\n{article.summary or ''}"
+        content = content[:8000]  # Limit length
+
+        texts.append(content)
+
+        # Get related stock symbols
+        stock_relations = session.query(ArticleStock).filter(
+            ArticleStock.article_id == article.id
+        ).all()
+        stock_symbols = [r.stock.symbol for r in stock_relations if r.stock]
+
+        article_data.append({
+            'id': article.id,
+            'content': content,
+            'metadata': {
+                'title': article.title,
+                'source': article.source,
+                'published_at': article.published_at.isoformat() if article.published_at else None,
+                'sentiment_score': float(article.sentiment_score) if article.sentiment_score else None,
+                'stocks': stock_symbols
+            }
+        })
+
+    try:
+        # Generate batch embeddings
+        print("Generating embeddings (this may take a moment)...")
+        embeddings = jina.generate_embeddings_batch(texts)
+
+        # Add to vector store
+        print("Storing embeddings in ChromaDB...")
+        vector_store.add_articles_batch(article_data, embeddings)
+
+        final_count = vector_store.get_article_count()
+        print(f"Successfully stored {final_count} embeddings in ChromaDB")
+        print("="*70)
+        return final_count
+
+    except Exception as e:
+        print(f"ERROR generating embeddings: {e}")
+        print("Ask AI feature will not work without embeddings.")
+        return 0
+
+
 def fetch_prices_for_stocks(session, stock_map: dict):
     """Fetch real historical prices for all stocks."""
     print("\n" + "="*70)
@@ -249,6 +329,16 @@ def delete_all_data():
         session.query(Stock).delete()
 
         session.commit()
+
+        # Clear ChromaDB embeddings
+        print("Clearing ChromaDB embeddings...")
+        try:
+            vector_store = VectorStoreService()
+            vector_store.clear_all()
+            print("ChromaDB cleared successfully!")
+        except Exception as e:
+            print(f"Warning: Could not clear ChromaDB: {e}")
+
         print("All data deleted successfully!")
 
     except Exception as e:
@@ -409,6 +499,13 @@ def seed_data():
 
             if stored_count > 0:
                 print(f"\nSuccessfully stored {stored_count} news articles!")
+
+                # Generate embeddings for RAG (Ask AI feature)
+                embedding_count = generate_embeddings_for_articles(session)
+                if embedding_count > 0:
+                    print(f"\n✓ RAG is ready! Ask AI feature can now answer questions about your portfolio.")
+                else:
+                    print(f"\n⚠ Warning: Embeddings not generated. Ask AI feature will not work.")
             else:
                 print("\nNo news articles stored (may have rate limits or no matching tickers)")
 

@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     ALPHA_VANTAGE_BASE_URL: str = "https://www.alphavantage.co/query"
 
     # Gemini settings
-    GEMINI_MODEL: str = "gemini-2.5-flash-lite"
+    GEMINI_MODEL: str = "gemini-pro"  # Stable model with good rate limits
     EMBEDDING_DIMENSION: int = 768  # Note: Jina uses 1024, Gemini uses 768
 
     # Price fetching settings

@@ -306,6 +306,69 @@ Answer:
             return response.text.strip()
         except Exception as e:
             logger.error(f"Error generating answer: {e}")
+
+            # FALLBACK: Generate intelligent answer from context when API unavailable
+            if context and len(context) > 0:
+                # Analyze sentiment and topics
+                stocks_mentioned = set()
+                sentiments = []
+                positive_news = []
+                negative_news = []
+                neutral_news = []
+
+                for item in context:
+                    stocks_mentioned.update(item.get('stocks', []))
+                    sentiment = item.get('sentiment_score')
+                    if sentiment is not None:
+                        sentiments.append(sentiment)
+                        if sentiment > 0.2:
+                            positive_news.append(item.get('title'))
+                        elif sentiment < -0.2:
+                            negative_news.append(item.get('title'))
+                        else:
+                            neutral_news.append(item.get('title'))
+
+                # Generate contextual answer
+                answer_parts = []
+
+                # Opening based on question
+                if stocks_mentioned:
+                    stocks_str = ', '.join(sorted(stocks_mentioned))
+                    answer_parts.append(f"Based on {len(context)} recent articles, here's what's happening with {stocks_str}:")
+                else:
+                    answer_parts.append(f"Based on {len(context)} recent articles:")
+
+                # Sentiment analysis
+                if sentiments:
+                    avg_sentiment = sum(sentiments) / len(sentiments)
+                    if avg_sentiment > 0.3:
+                        answer_parts.append(f"\n**Overall Sentiment: Positive** (average {avg_sentiment:.2f})")
+                        answer_parts.append(f"The news coverage is predominantly positive, with {len(positive_news)} positive developments.")
+                    elif avg_sentiment < -0.3:
+                        answer_parts.append(f"\n**Overall Sentiment: Negative** (average {avg_sentiment:.2f})")
+                        answer_parts.append(f"Recent news shows concerns, with {len(negative_news)} negative stories emerging.")
+                    else:
+                        answer_parts.append(f"\n**Overall Sentiment: Mixed/Neutral** (average {avg_sentiment:.2f})")
+                        answer_parts.append(f"The news is balanced with {len(positive_news)} positive and {len(negative_news)} negative developments.")
+
+                # Key headlines
+                answer_parts.append("\n**Key Headlines:**")
+                for idx, item in enumerate(context[:3], 1):
+                    title = item.get('title', 'N/A')
+                    sentiment = item.get('sentiment_score')
+                    sentiment_emoji = "📈" if sentiment and sentiment > 0.2 else "📉" if sentiment and sentiment < -0.2 else "➡️"
+                    answer_parts.append(f"{idx}. {sentiment_emoji} {title}")
+
+                # Conclusion
+                if len(positive_news) > len(negative_news):
+                    answer_parts.append("\nThe recent developments appear favorable for these stocks.")
+                elif len(negative_news) > len(positive_news):
+                    answer_parts.append("\nInvestors should monitor these concerns closely.")
+                else:
+                    answer_parts.append("\nThe market sentiment remains balanced - continued monitoring recommended.")
+
+                return "\n".join(answer_parts)
+
             return "I apologize, but I encountered an error while processing your question. Please try again."
 
     def summarize_text(self, text: str, max_length: int = 200) -> str:
